@@ -18,7 +18,7 @@ type converter struct {
 
 func newConverter(o Options, val *r.Value, writer io.Writer) converter {
 	c := converter{options: o, stack: gs.Stack[*item]{}, writer: writer}
-	c.stack.Push(&item{val: val})
+	c.push(none, 0, val)
 	return c
 }
 
@@ -40,11 +40,39 @@ func (c *converter) processItem(it *item) error {
 	kind := it.val.Kind()
 
 	switch kind {
+	case r.Array, r.Slice:
+		if it.flag > none {
+			return c.processBytes(it)
+		}
+
+		if it.ix == 0 {
+			elemKind := it.val.Type().Elem().Kind()
+
+			if c.options.ByteAsString && elemKind == r.Uint8 {
+				it.flag = bytes
+				return c.processBytes(it)
+			}
+
+			if c.options.RuneAsString && elemKind == r.Int32 {
+				it.flag = runes
+				return c.processBytes(it)
+			}
+		}
+
+		return c.processArray(it)
 	case r.Pointer:
 		return c.processPointer(it)
 	}
 
 	c.stack.Pop()
+
+	if it.flag > 0 {
+		if it.flag == bytes {
+			return c.processByte(it.val)
+		} else if it.flag == runes {
+			return c.processRune(it.val)
+		}
+	}
 
 	switch kind {
 
@@ -82,6 +110,58 @@ func (c *converter) processItem(it *item) error {
 	default:
 		return c.write("{unknown}")
 	}
+}
+
+func (c *converter) push(f int, i int, v *r.Value) {
+	c.stack.Push(newItem(f, i, v))
+}
+
+func (c *converter) processArray(it *item) error {
+	l := it.val.Len()
+
+	if it.ix == 0 {
+		err := c.writeRune('[')
+
+		if err != nil {
+			return err
+		}
+	} else if it.ix < l {
+		err := c.writeRune(' ')
+
+		if err != nil {
+			return err
+		}
+	} else if it.ix == l {
+		err := c.writeRune(']')
+
+		if err != nil {
+			return err
+		}
+
+		c.stack.Pop()
+		return nil
+	}
+
+	elem := it.val.Index(it.ix)
+	c.push(none, 0, &elem)
+
+	it.ix++
+	return nil
+}
+
+func (c *converter) processBytes(it *item) error {
+	l := it.val.Len()
+
+	if it.ix == l {
+		c.stack.Pop()
+		return nil
+	}
+
+	elem := it.val.Index(it.ix)
+	c.push(it.flag, 0, &elem)
+
+	it.ix++
+	return nil
 }
 
 func (c *converter) processPointer(it *item) error {

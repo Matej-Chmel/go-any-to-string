@@ -29,6 +29,22 @@ func check[T any](data T, expected string, t *testing.T, o ...ats.Options) {
 	t.Errorf("(line %d) %s != %s", line, actual, expected)
 }
 
+func TestArrays(t *testing.T) {
+	check([...]bool{false, true}, "[false true]", t)
+	check([...]byte{12, 34}, "[12 34]", t)
+	check([...]int{1, 2, 3}, "[1 2 3]", t)
+	check([]int{4, 5, 6}, "[4 5 6]", t)
+	check([]rune{'A', 'B'}, "[65 66]", t)
+	check([]string{"hello", "world"}, "[hello world]", t)
+
+	o := ats.NewOptions()
+	o.ByteAsString = true
+	o.RuneAsString = true
+
+	check([]byte{67, 68}, "CD", t, o)
+	check([]rune{'A', 'B'}, "AB", t, o)
+}
+
 func TestBasicTypes(t *testing.T) {
 	check(false, "false", t)
 	check(true, "true", t)
