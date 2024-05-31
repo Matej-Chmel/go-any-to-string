@@ -1,6 +1,7 @@
 package goanytostring
 
 import (
+	"fmt"
 	"io"
 	r "reflect"
 	"strconv"
@@ -87,6 +88,8 @@ func (c *converter) processItem(it *item) error {
 		return c.processBool(it.val)
 	case r.Chan:
 		return c.processChan(it.val)
+	case r.Complex64, r.Complex128:
+		return c.processComplex(it.val)
 	case r.Float32:
 		return c.processFloat(it.val, 32)
 	case r.Float64:
@@ -205,10 +208,20 @@ func (c *converter) processChan(val *r.Value) error {
 	return c.write(val.Type().Elem().String())
 }
 
-func (c *converter) processFloat(val *r.Value, bitSize int) error {
-	s := strconv.FormatFloat(val.Float(), 'f', 3, bitSize)
+func floatToString(f float64, bitSize int) string {
+	s := strconv.FormatFloat(f, 'f', 3, bitSize)
 	s = strings.TrimRight(s, "0")
-	return c.write(strings.TrimRight(s, "."))
+	return strings.TrimRight(s, ".")
+}
+
+func (c *converter) processComplex(val *r.Value) error {
+	realPart := floatToString(real(val.Complex()), 64)
+	imagPart := floatToString(imag(val.Complex()), 64)
+	return c.write(fmt.Sprintf("%s + %si", realPart, imagPart))
+}
+
+func (c *converter) processFloat(val *r.Value, bitSize int) error {
+	return c.write(floatToString(val.Float(), bitSize))
 }
 
 func (c *converter) processInt(val *r.Value) error {

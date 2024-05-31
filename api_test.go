@@ -97,6 +97,15 @@ func TestBasicTypes(t *testing.T) {
 	check('A', "A", t, o)
 }
 
+func TestComplex(t *testing.T) {
+	check(1+1i, "1 + 1i", t)
+	check(1.2+4.3i, "1.2 + 4.3i", t)
+	check(1.2345+4.3456i, "1.234 + 4.346i", t)
+	checkPtr(1+1i, "&1 + 1i", t)
+	checkPtr(1.2+4.3i, "&1.2 + 4.3i", t)
+	checkPtr(1.2345+4.3456i, "&1.234 + 4.346i", t)
+}
+
 func TestPointers(t *testing.T) {
 	checkPtr(false, "&false", t)
 	checkPtr(true, "&true", t)
