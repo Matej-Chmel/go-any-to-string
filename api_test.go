@@ -124,3 +124,34 @@ func TestPointers(t *testing.T) {
 	checkPtr(byte(65), "&A", t, o)
 	checkPtr('A', "&A", t, o)
 }
+
+type Example struct {
+	a int
+	B string
+	c rune
+}
+
+type NestedExample struct {
+	Example
+	b string
+	C rune
+}
+
+type SliceExample struct {
+	bytes []byte
+	ints  []int
+}
+
+func TestStruct(t *testing.T) {
+	a := Example{12, "hello", '*'}
+	b := NestedExample{Example{34, "world", '%'}, "super", 'X'}
+	c := SliceExample{[]byte("hello world"), []int{1, 2, 3}}
+
+	o := ats.NewOptions()
+	o.ByteAsString = true
+	o.RuneAsString = true
+
+	check(a, "{12 hello *}", t, o)
+	check(b, "{{34 world %} super X}", t, o)
+	check(c, "{hello world [1 2 3]}", t, o)
+}

@@ -5,6 +5,7 @@ import (
 	r "reflect"
 	"strconv"
 	"strings"
+	"unsafe"
 
 	gs "github.com/Matej-Chmel/go-generic-stack"
 )
@@ -37,6 +38,10 @@ func (c *converter) run() error {
 }
 
 func (c *converter) processItem(it *item) error {
+	if it.flag == structData {
+		return c.processStruct(it)
+	}
+
 	kind := it.val.Kind()
 
 	switch kind {
@@ -62,6 +67,8 @@ func (c *converter) processItem(it *item) error {
 		return c.processArray(it)
 	case r.Pointer:
 		return c.processPointer(it)
+	case r.Struct:
+		return c.processStruct(it)
 	}
 
 	c.stack.Pop()
@@ -171,8 +178,12 @@ func (c *converter) processPointer(it *item) error {
 		return err
 	}
 
-	elem := it.val.Elem()
-	it.val = &elem
+	if elem := it.val.Elem(); elem.Kind() == r.Struct {
+		it.flag = structData
+	} else {
+		it.val = &elem
+	}
+
 	return nil
 }
 
@@ -210,6 +221,51 @@ func (c *converter) processRune(val *r.Value) error {
 
 func (c *converter) processString(val *r.Value) error {
 	return c.write(val.String())
+}
+
+func (c *converter) processStruct(it *item) error {
+	if it.flag != structData {
+		tmp := r.New(it.val.Type())
+		tmp.Elem().Set(*it.val)
+		elem := tmp.Elem()
+		it.val = &elem
+	}
+
+	if it.ix == 0 {
+		err := c.writeRune('{')
+
+		if err != nil {
+			return err
+		}
+	} else if it.ix < it.val.NumField() {
+		err := c.writeRune(' ')
+
+		if err != nil {
+			return err
+		}
+	} else if it.ix == it.val.NumField() {
+		err := c.writeRune('}')
+
+		if err != nil {
+			return err
+		}
+
+		c.stack.Pop()
+		return nil
+	}
+
+	field := it.val.Field(it.ix)
+
+	if field.CanInterface() {
+		c.push(none, 0, &field)
+	} else {
+		addr := unsafe.Pointer(field.UnsafeAddr())
+		data := r.NewAt(field.Type(), addr).Elem()
+		c.push(none, 0, &data)
+	}
+
+	it.ix++
+	return nil
 }
 
 func (c *converter) processUint(val *r.Value) error {

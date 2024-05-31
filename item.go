@@ -12,6 +12,7 @@ const (
 	none = iota
 	bytes
 	runes
+	structData
 )
 
 func newItem(f int, i int, v *reflect.Value) *item {
