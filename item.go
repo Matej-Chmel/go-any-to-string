@@ -15,6 +15,7 @@ const (
 	keyNext
 	runes
 	structData
+	top
 	valueNext
 )
 

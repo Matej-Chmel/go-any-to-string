@@ -21,7 +21,7 @@ type converter struct {
 
 func newConverter(o Options, val *r.Value, writer io.Writer) converter {
 	c := converter{options: o, stack: gs.Stack[*item]{}, writer: writer}
-	c.push(none, 0, val)
+	c.push(top, 0, val)
 	return c
 }
 
@@ -39,7 +39,38 @@ func (c *converter) run() error {
 	return err
 }
 
+func formatType(t r.Type, top bool) (s string) {
+	switch t.Kind() {
+	case r.Array, r.Slice:
+		s = fmt.Sprintf("[]%s", formatType(t.Elem(), false))
+	case r.Map:
+		s = fmt.Sprintf("map[%s]%s", formatType(t.Key(), false), formatType(t.Elem(), false))
+	case r.Struct:
+		s = t.Name()
+	default:
+		s = t.String()
+	}
+
+	if top {
+		s += " "
+	}
+
+	return
+}
+
 func (c *converter) processItem(it *item) error {
+	if it.flag == top {
+		it.flag = none
+
+		if c.options.ShowType {
+			err := c.write(formatType(it.val.Type(), true))
+
+			if err != nil {
+				return err
+			}
+		}
+	}
+
 	if it.flag == structData {
 		return c.processStruct(it)
 	}

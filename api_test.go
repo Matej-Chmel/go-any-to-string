@@ -137,6 +137,12 @@ func TestFormat(t *testing.T) {
 	mustContain(actual, "12:hello", t)
 	mustContain(actual, "34:world", t)
 	mustContain(actual, o.MapSep, t)
+
+	o.ShowType = true
+	check(a, "[]int << 4, 5, 6 >>", t, o)
+
+	actual = ats.AnyToStringCustom(m, o)
+	mustStartWith(actual, "map[int]string ", t)
 }
 
 func TestFunc(t *testing.T) {
