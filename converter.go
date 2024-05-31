@@ -1,0 +1,151 @@
+package goanytostring
+
+import (
+	"io"
+	r "reflect"
+	"strconv"
+	"strings"
+
+	gs "github.com/Matej-Chmel/go-generic-stack"
+)
+
+type converter struct {
+	builder strings.Builder
+	options Options
+	stack   gs.Stack[*item]
+	writer  io.Writer
+}
+
+func newConverter(o Options, val *r.Value, writer io.Writer) converter {
+	c := converter{options: o, stack: gs.Stack[*item]{}, writer: writer}
+	c.stack.Push(&item{val: val})
+	return c
+}
+
+func (c *converter) run() error {
+	for c.stack.HasItems() {
+		top, _ := c.stack.Top()
+		err := c.processItem(top)
+
+		if err != nil {
+			return err
+		}
+	}
+
+	_, err := c.writer.Write([]byte(c.builder.String()))
+	return err
+}
+
+func (c *converter) processItem(it *item) error {
+	kind := it.val.Kind()
+
+	switch kind {
+	case r.Pointer:
+		return c.processPointer(it)
+	}
+
+	c.stack.Pop()
+
+	switch kind {
+
+	case r.Bool:
+		return c.processBool(it.val)
+	case r.Chan:
+		return c.processChan(it.val)
+	case r.Float32:
+		return c.processFloat(it.val, 32)
+	case r.Float64:
+		return c.processFloat(it.val, 64)
+
+	case r.Int32:
+		if c.options.RuneAsString {
+			return c.processRune(it.val)
+		}
+
+		return c.processInt(it.val)
+
+	case r.Int, r.Int8, r.Int16, r.Int64:
+		return c.processInt(it.val)
+
+	case r.Uint, r.Uint16, r.Uint32, r.Uint64:
+		return c.processUint(it.val)
+
+	case r.Uint8:
+		if c.options.ByteAsString {
+			return c.processByte(it.val)
+		}
+
+		return c.processUint(it.val)
+
+	case r.String:
+		return c.processString(it.val)
+	default:
+		return c.write("{unknown}")
+	}
+}
+
+func (c *converter) processPointer(it *item) error {
+	err := c.write("&")
+
+	if err != nil {
+		return err
+	}
+
+	elem := it.val.Elem()
+	it.val = &elem
+	return nil
+}
+
+func (c *converter) processBool(val *r.Value) error {
+	return c.write(strconv.FormatBool(val.Bool()))
+}
+
+func (c *converter) processByte(val *r.Value) error {
+	return c.writeByte(byte(val.Uint()))
+}
+
+func (c *converter) processChan(val *r.Value) error {
+	err := c.write("chan ")
+
+	if err != nil {
+		return err
+	}
+
+	return c.write(val.Type().Elem().String())
+}
+
+func (c *converter) processFloat(val *r.Value, bitSize int) error {
+	s := strconv.FormatFloat(val.Float(), 'f', 3, bitSize)
+	s = strings.TrimRight(s, "0")
+	return c.write(strings.TrimRight(s, "."))
+}
+
+func (c *converter) processInt(val *r.Value) error {
+	return c.write(strconv.FormatInt(val.Int(), 10))
+}
+
+func (c *converter) processRune(val *r.Value) error {
+	return c.writeRune(rune(val.Int()))
+}
+
+func (c *converter) processString(val *r.Value) error {
+	return c.write(val.String())
+}
+
+func (c *converter) processUint(val *r.Value) error {
+	return c.write(strconv.FormatUint(val.Uint(), 10))
+}
+
+func (c *converter) write(s string) error {
+	_, err := c.builder.WriteString(s)
+	return err
+}
+
+func (c *converter) writeByte(b byte) error {
+	return c.builder.WriteByte(b)
+}
+
+func (c *converter) writeRune(r rune) error {
+	_, err := c.builder.WriteRune(r)
+	return err
+}
