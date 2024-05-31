@@ -66,6 +66,8 @@ func (c *converter) processItem(it *item) error {
 		}
 
 		return c.processArray(it)
+	case r.Map:
+		return c.processMap(it)
 	case r.Pointer:
 		return c.processPointer(it)
 	case r.Struct:
@@ -117,6 +119,7 @@ func (c *converter) processItem(it *item) error {
 
 	case r.String:
 		return c.processString(it.val)
+
 	default:
 		return c.write("{unknown}")
 	}
@@ -174,6 +177,48 @@ func (c *converter) processBytes(it *item) error {
 	return nil
 }
 
+func (c *converter) processMap(it *item) error {
+	if it.flag == none && it.ix == 0 {
+		err := c.writeRune('{')
+
+		if err != nil {
+			return err
+		}
+
+		it.flag = keyNext
+	} else if it.flag == keyNext && it.ix < it.val.Len() {
+		err := c.writeRune(' ')
+
+		if err != nil {
+			return err
+		}
+	} else if it.ix == it.val.Len() {
+		err := c.writeRune('}')
+
+		if err != nil {
+			return err
+		}
+
+		c.stack.Pop()
+		return nil
+	}
+
+	key := it.val.MapKeys()[it.ix]
+
+	if it.flag == keyNext {
+		c.push(none, 0, &key)
+		it.flag = valueNext
+	} else if it.flag == valueNext {
+		c.writeRune(':')
+		val := it.val.MapIndex(key)
+		c.push(none, 0, &val)
+		it.flag = keyNext
+		it.ix++
+	}
+
+	return nil
+}
+
 func (c *converter) processPointer(it *item) error {
 	err := c.write("&")
 
@@ -187,6 +232,51 @@ func (c *converter) processPointer(it *item) error {
 		it.val = &elem
 	}
 
+	return nil
+}
+
+func (c *converter) processStruct(it *item) error {
+	if it.flag != structData {
+		tmp := r.New(it.val.Type())
+		tmp.Elem().Set(*it.val)
+		elem := tmp.Elem()
+		it.val = &elem
+	}
+
+	if it.ix == 0 {
+		err := c.writeRune('{')
+
+		if err != nil {
+			return err
+		}
+	} else if it.ix < it.val.NumField() {
+		err := c.writeRune(' ')
+
+		if err != nil {
+			return err
+		}
+	} else if it.ix == it.val.NumField() {
+		err := c.writeRune('}')
+
+		if err != nil {
+			return err
+		}
+
+		c.stack.Pop()
+		return nil
+	}
+
+	field := it.val.Field(it.ix)
+
+	if field.CanInterface() {
+		c.push(none, 0, &field)
+	} else {
+		addr := unsafe.Pointer(field.UnsafeAddr())
+		data := r.NewAt(field.Type(), addr).Elem()
+		c.push(none, 0, &data)
+	}
+
+	it.ix++
 	return nil
 }
 
@@ -234,51 +324,6 @@ func (c *converter) processRune(val *r.Value) error {
 
 func (c *converter) processString(val *r.Value) error {
 	return c.write(val.String())
-}
-
-func (c *converter) processStruct(it *item) error {
-	if it.flag != structData {
-		tmp := r.New(it.val.Type())
-		tmp.Elem().Set(*it.val)
-		elem := tmp.Elem()
-		it.val = &elem
-	}
-
-	if it.ix == 0 {
-		err := c.writeRune('{')
-
-		if err != nil {
-			return err
-		}
-	} else if it.ix < it.val.NumField() {
-		err := c.writeRune(' ')
-
-		if err != nil {
-			return err
-		}
-	} else if it.ix == it.val.NumField() {
-		err := c.writeRune('}')
-
-		if err != nil {
-			return err
-		}
-
-		c.stack.Pop()
-		return nil
-	}
-
-	field := it.val.Field(it.ix)
-
-	if field.CanInterface() {
-		c.push(none, 0, &field)
-	} else {
-		addr := unsafe.Pointer(field.UnsafeAddr())
-		data := r.NewAt(field.Type(), addr).Elem()
-		c.push(none, 0, &data)
-	}
-
-	it.ix++
-	return nil
 }
 
 func (c *converter) processUint(val *r.Value) error {

@@ -106,6 +106,13 @@ func TestComplex(t *testing.T) {
 	checkPtr(1.2345+4.3456i, "&1.234 + 4.346i", t)
 }
 
+func TestMap(t *testing.T) {
+	i := map[int]string{12: "hello", 34: "world"}
+
+	check(i, "{12:hello 34:world}", t)
+	checkPtr(i, "&{12:hello 34:world}", t)
+}
+
 func TestPointers(t *testing.T) {
 	checkPtr(false, "&false", t)
 	checkPtr(true, "&true", t)

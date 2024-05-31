@@ -11,8 +11,10 @@ type item struct {
 const (
 	none = iota
 	bytes
+	keyNext
 	runes
 	structData
+	valueNext
 )
 
 func newItem(f int, i int, v *reflect.Value) *item {
