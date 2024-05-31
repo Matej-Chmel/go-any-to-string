@@ -5,6 +5,7 @@ import "reflect"
 type item struct {
 	flag int
 	ix   int
+	keys []reflect.Value
 	val  *reflect.Value
 }
 
@@ -18,5 +19,5 @@ const (
 )
 
 func newItem(f int, i int, v *reflect.Value) *item {
-	return &item{flag: f, ix: i, val: v}
+	return &item{flag: f, ix: i, keys: nil, val: v}
 }

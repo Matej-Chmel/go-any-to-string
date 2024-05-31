@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	r "reflect"
+	"runtime"
 	"strconv"
 	"strings"
 	"unsafe"
@@ -96,6 +97,8 @@ func (c *converter) processItem(it *item) error {
 		return c.processFloat(it.val, 32)
 	case r.Float64:
 		return c.processFloat(it.val, 64)
+	case r.Func:
+		return c.processFunc(it.val)
 
 	case r.Int32:
 		if c.options.RuneAsString {
@@ -187,6 +190,8 @@ func (c *converter) processBytes(it *item) error {
 
 func (c *converter) processMap(it *item) error {
 	if it.flag == none && it.ix == 0 {
+		it.keys = it.val.MapKeys()
+
 		err := c.writeRune('{')
 
 		if err != nil {
@@ -211,7 +216,7 @@ func (c *converter) processMap(it *item) error {
 		return nil
 	}
 
-	key := it.val.MapKeys()[it.ix]
+	key := it.keys[it.ix]
 
 	if it.flag == keyNext {
 		c.push(none, 0, &key)
@@ -322,6 +327,76 @@ func (c *converter) processFloat(val *r.Value, bitSize int) error {
 	return c.write(floatToString(val.Float(), bitSize))
 }
 
+func (c *converter) processFunc(val *r.Value) error {
+	typ := val.Type()
+	in, out := typ.NumIn(), typ.NumOut()
+
+	name := runtime.FuncForPC(val.Pointer()).Name()
+	parts := strings.Split(name, ".")
+	lastIx := len(parts) - 1
+	// pkg := strings.Join(parts[:lastIx])
+	funcName := parts[lastIx]
+
+	err := c.write(funcName)
+	if err != nil {
+		return err
+	}
+
+	err = c.writeRune('(')
+	if err != nil {
+		return err
+	}
+
+	for i := 0; i < in; i++ {
+		if i > 0 {
+			err = c.write(", ")
+			if err != nil {
+				return err
+			}
+		}
+
+		err = c.write(typ.In(i).String())
+		if err != nil {
+			return err
+		}
+	}
+
+	err = c.write(") ")
+	if err != nil {
+		return err
+	}
+
+	if out > 1 {
+		err = c.writeRune('(')
+		if err != nil {
+			return err
+		}
+	}
+
+	for i := 0; i < out; i++ {
+		if i > 0 {
+			err = c.write(", ")
+			if err != nil {
+				return err
+			}
+		}
+
+		err = c.write(typ.Out(i).String())
+		if err != nil {
+			return err
+		}
+	}
+
+	if out > 1 {
+		err = c.writeRune(')')
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
 func (c *converter) processInt(val *r.Value) error {
 	return c.write(strconv.FormatInt(val.Int(), 10))
 }
@@ -351,6 +426,7 @@ func (c *converter) processUnsafe(val *r.Value) error {
 }
 
 func (c *converter) write(s string) error {
+	fmt.Println(s)
 	_, err := c.builder.WriteString(s)
 	return err
 }

@@ -1,7 +1,9 @@
 package goanytostring_test
 
 import (
+	"fmt"
 	"runtime"
+	"strings"
 	"testing"
 	"unsafe"
 
@@ -27,11 +29,11 @@ func checkImpl[T any](skip int, data T, expected string, t *testing.T, o ...ats.
 
 	_, _, line, ok := runtime.Caller(skip)
 
-	if !ok {
+	if ok {
+		t.Errorf("(line %d) %s != %s", line, actual, expected)
+	} else {
 		t.Errorf("%s != %s", actual, expected)
 	}
-
-	t.Errorf("(line %d) %s != %s", line, actual, expected)
 }
 
 func checkPtr[T any](data T, expected string, t *testing.T, o ...ats.Options) {
@@ -107,17 +109,54 @@ func TestComplex(t *testing.T) {
 	checkPtr(1.2345+4.3456i, "&1.234 + 4.346i", t)
 }
 
+func hello(a int) string {
+	return fmt.Sprintf("%d", a)
+}
+
+func tuple(a, b int, c string) (int, int, string) {
+	return a, b, c
+}
+
+func TestFunc(t *testing.T) {
+	check(hello, "hello(int) string", t)
+	checkPtr(hello, "&hello(int) string", t)
+
+	check(tuple, "tuple(int, int, string) (int, int, string)", t)
+	checkPtr(tuple, "&tuple(int, int, string) (int, int, string)", t)
+}
+
 func TestInterface(t *testing.T) {
 	var i interface{}
 	check(i, "interface{}", t)
 	checkPtr(i, "&interface{}", t)
 }
 
-func TestMap(t *testing.T) {
-	i := map[int]string{12: "hello", 34: "world"}
+func mustContain(actual string, substr string, t *testing.T) {
+	if strings.Contains(actual, substr) {
+		return
+	}
 
-	check(i, "{12:hello 34:world}", t)
-	checkPtr(i, "&{12:hello 34:world}", t)
+	_, _, line, ok := runtime.Caller(1)
+
+	if ok {
+		t.Errorf("(line %d) %s NOT IN %s", line, substr, actual)
+	} else {
+		t.Errorf("%s NOT IN %s", substr, actual)
+	}
+}
+
+func TestMap(t *testing.T) {
+	fa, tr := false, true
+	i := map[int]string{12: "hello", 34: "world"}
+	s := map[string]*bool{"F": &fa, "T": &tr}
+
+	actual := ats.AnyToString(i)
+	mustContain(actual, "12:hello", t)
+	mustContain(actual, "34:world", t)
+
+	actual = ats.AnyToString(s)
+	mustContain(actual, "F:&false", t)
+	mustContain(actual, "T:&true", t)
 }
 
 func TestMemory(t *testing.T) {
