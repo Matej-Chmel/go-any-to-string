@@ -152,9 +152,10 @@ func TestFunc(t *testing.T) {
 	check(tuple, "tuple(int, int, string) (int, int, string)", t)
 	checkPtr(tuple, "&tuple(int, int, string) (int, int, string)", t)
 
-	check(func(i int) int {
+	actual := ats.AnyToString(func(i int) int {
 		return i + 1
-	}, "(int) int", t)
+	})
+	mustContain(actual, "(int) int", t)
 }
 
 func TestInterface(t *testing.T) {

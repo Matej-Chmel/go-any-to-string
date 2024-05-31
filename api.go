@@ -11,9 +11,26 @@ func AnyToString(a any) string {
 }
 
 func AnyToStringCustom(a any, o Options) string {
-	var builder strings.Builder
 	val := reflect.ValueOf(a)
-	c := newConverter(o, &val, &builder)
+	return ValueToStringCustom(&val, o)
+}
+
+func AnyToWriter(a any, w io.Writer) error {
+	return AnyToWriterCustom(a, NewOptions(), w)
+}
+
+func AnyToWriterCustom(a any, o Options, w io.Writer) error {
+	val := reflect.ValueOf(a)
+	return ValueToWriterCustom(&val, o, w)
+}
+
+func ValueToString(val *reflect.Value) string {
+	return ValueToStringCustom(val, NewOptions())
+}
+
+func ValueToStringCustom(val *reflect.Value, o Options) string {
+	var builder strings.Builder
+	c := newConverter(o, val, &builder)
 	err := c.run()
 
 	if err != nil {
@@ -23,12 +40,11 @@ func AnyToStringCustom(a any, o Options) string {
 	return builder.String()
 }
 
-func AnyToWriter(a any, w io.Writer) error {
-	return AnyToWriterCustom(a, NewOptions(), w)
+func ValueToWriter(val *reflect.Value, w io.Writer) error {
+	return ValueToWriterCustom(val, NewOptions(), w)
 }
 
-func AnyToWriterCustom(a any, o Options, w io.Writer) error {
-	val := reflect.ValueOf(a)
-	c := newConverter(o, &val, w)
+func ValueToWriterCustom(val *reflect.Value, o Options, w io.Writer) error {
+	c := newConverter(o, val, w)
 	return c.run()
 }
