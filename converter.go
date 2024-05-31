@@ -107,6 +107,9 @@ func (c *converter) processItem(it *item) error {
 	case r.Int, r.Int8, r.Int16, r.Int64:
 		return c.processInt(it.val)
 
+	case r.Interface, r.Invalid:
+		return c.processInterface(it.val)
+
 	case r.Uint, r.Uint16, r.Uint32, r.Uint64:
 		return c.processUint(it.val)
 
@@ -126,7 +129,7 @@ func (c *converter) processItem(it *item) error {
 		return c.processUnsafe(it.val)
 
 	default:
-		return c.write("{unknown}")
+		return c.write(kind.String())
 	}
 }
 
@@ -321,6 +324,10 @@ func (c *converter) processFloat(val *r.Value, bitSize int) error {
 
 func (c *converter) processInt(val *r.Value) error {
 	return c.write(strconv.FormatInt(val.Int(), 10))
+}
+
+func (c *converter) processInterface(_ *r.Value) error {
+	return c.write("interface{}")
 }
 
 func (c *converter) processRune(val *r.Value) error {

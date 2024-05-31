@@ -107,6 +107,12 @@ func TestComplex(t *testing.T) {
 	checkPtr(1.2345+4.3456i, "&1.234 + 4.346i", t)
 }
 
+func TestInterface(t *testing.T) {
+	var i interface{}
+	check(i, "interface{}", t)
+	checkPtr(i, "&interface{}", t)
+}
+
 func TestMap(t *testing.T) {
 	i := map[int]string{12: "hello", 34: "world"}
 
