@@ -3,6 +3,7 @@ package goanytostring_test
 import (
 	"runtime"
 	"testing"
+	"unsafe"
 
 	ats "github.com/Matej-Chmel/go-any-to-string"
 )
@@ -111,6 +112,14 @@ func TestMap(t *testing.T) {
 
 	check(i, "{12:hello 34:world}", t)
 	checkPtr(i, "&{12:hello 34:world}", t)
+}
+
+func TestMemory(t *testing.T) {
+	check(uintptr(0x12345678), "0x12345678", t)
+	checkPtr(uintptr(0x12345678), "&0x12345678", t)
+
+	check(unsafe.Pointer(uintptr(0x34125678)), "Ux34125678", t)
+	checkPtr(unsafe.Pointer(uintptr(0x34125678)), "&Ux34125678", t)
 }
 
 func TestPointers(t *testing.T) {

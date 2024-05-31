@@ -120,6 +120,11 @@ func (c *converter) processItem(it *item) error {
 	case r.String:
 		return c.processString(it.val)
 
+	case r.Uintptr:
+		return c.processUintptr(it.val)
+	case r.UnsafePointer:
+		return c.processUnsafe(it.val)
+
 	default:
 		return c.write("{unknown}")
 	}
@@ -328,6 +333,14 @@ func (c *converter) processString(val *r.Value) error {
 
 func (c *converter) processUint(val *r.Value) error {
 	return c.write(strconv.FormatUint(val.Uint(), 10))
+}
+
+func (c *converter) processUintptr(val *r.Value) error {
+	return c.write(fmt.Sprintf("0x%X", val.Uint()))
+}
+
+func (c *converter) processUnsafe(val *r.Value) error {
+	return c.write(fmt.Sprintf("Ux%X", val.Pointer()))
 }
 
 func (c *converter) write(s string) error {
