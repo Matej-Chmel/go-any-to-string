@@ -117,12 +117,38 @@ func tuple(a, b int, c string) (int, int, string) {
 	return a, b, c
 }
 
+func TestFormat(t *testing.T) {
+	a := [...]int{4, 5, 6}
+	m := map[int]string{12: "hello", 34: "world"}
+
+	o := ats.NewOptions()
+	o.ArrayStart = "<< "
+	o.ArrayEnd = " >>"
+	o.ArraySep = ", "
+	o.MapStart = ":: "
+	o.MapEnd = "!"
+	o.MapSep = " - "
+
+	check(a, "<< 4, 5, 6 >>", t, o)
+
+	actual := ats.AnyToStringCustom(m, o)
+	mustStartWith(actual, o.MapStart, t)
+	mustEndWith(actual, o.MapEnd, t)
+	mustContain(actual, "12:hello", t)
+	mustContain(actual, "34:world", t)
+	mustContain(actual, o.MapSep, t)
+}
+
 func TestFunc(t *testing.T) {
 	check(hello, "hello(int) string", t)
 	checkPtr(hello, "&hello(int) string", t)
 
 	check(tuple, "tuple(int, int, string) (int, int, string)", t)
 	checkPtr(tuple, "&tuple(int, int, string) (int, int, string)", t)
+
+	check(func(i int) int {
+		return i + 1
+	}, "(int) int", t)
 }
 
 func TestInterface(t *testing.T) {
@@ -143,6 +169,28 @@ func mustContain(actual string, substr string, t *testing.T) {
 	} else {
 		t.Errorf("%s NOT IN %s", substr, actual)
 	}
+}
+
+func mustAffix(f func(string, string) bool, actual string, s string, t *testing.T) {
+	if f(actual, s) {
+		return
+	}
+
+	_, _, line, ok := runtime.Caller(2)
+
+	if ok {
+		t.Errorf("(line %d) %s NOT WITH %s", line, actual, s)
+	} else {
+		t.Errorf("%s DOES NOT WITH %s", actual, s)
+	}
+}
+
+func mustStartWith(actual string, s string, t *testing.T) {
+	mustAffix(strings.HasPrefix, actual, s, t)
+}
+
+func mustEndWith(actual string, s string, t *testing.T) {
+	mustAffix(strings.HasSuffix, actual, s, t)
 }
 
 func TestMap(t *testing.T) {

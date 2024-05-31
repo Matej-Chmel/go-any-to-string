@@ -144,19 +144,19 @@ func (c *converter) processArray(it *item) error {
 	l := it.val.Len()
 
 	if it.ix == 0 {
-		err := c.writeRune('[')
+		err := c.write(c.options.ArrayStart)
 
 		if err != nil {
 			return err
 		}
 	} else if it.ix < l {
-		err := c.writeRune(' ')
+		err := c.write(c.options.ArraySep)
 
 		if err != nil {
 			return err
 		}
 	} else if it.ix == l {
-		err := c.writeRune(']')
+		err := c.write(c.options.ArrayEnd)
 
 		if err != nil {
 			return err
@@ -192,7 +192,7 @@ func (c *converter) processMap(it *item) error {
 	if it.flag == none && it.ix == 0 {
 		it.keys = it.val.MapKeys()
 
-		err := c.writeRune('{')
+		err := c.write(c.options.MapStart)
 
 		if err != nil {
 			return err
@@ -200,13 +200,13 @@ func (c *converter) processMap(it *item) error {
 
 		it.flag = keyNext
 	} else if it.flag == keyNext && it.ix < it.val.Len() {
-		err := c.writeRune(' ')
+		err := c.write(c.options.MapSep)
 
 		if err != nil {
 			return err
 		}
 	} else if it.ix == it.val.Len() {
-		err := c.writeRune('}')
+		err := c.write(c.options.MapEnd)
 
 		if err != nil {
 			return err
@@ -426,7 +426,6 @@ func (c *converter) processUnsafe(val *r.Value) error {
 }
 
 func (c *converter) write(s string) error {
-	fmt.Println(s)
 	_, err := c.builder.WriteString(s)
 	return err
 }
