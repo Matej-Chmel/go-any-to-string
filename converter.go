@@ -270,12 +270,13 @@ func (c *converter) processPointer(it *item) error {
 		return err
 	}
 
-	if elem := it.val.Elem(); elem.Kind() == r.Struct {
+	elem := it.val.Elem()
+
+	if elem.Kind() == r.Struct {
 		it.flag = structData
-	} else {
-		it.val = &elem
 	}
 
+	it.val = &elem
 	return nil
 }
 

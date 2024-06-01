@@ -279,4 +279,8 @@ func TestStruct(t *testing.T) {
 	check(a, "{12 hello *}", t, o)
 	check(b, "{{34 world %} super X}", t, o)
 	check(c, "{hello world [1 2 3]}", t, o)
+
+	checkPtr(a, "&{12 hello *}", t, o)
+	checkPtr(b, "&{{34 world %} super X}", t, o)
+	checkPtr(c, "&{hello world [1 2 3]}", t, o)
 }
