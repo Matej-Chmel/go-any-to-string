@@ -1,27 +1,9 @@
 package goanytostring
 
-type Options struct {
-	ArrayStart   string
-	ArrayEnd     string
-	ArraySep     string
-	ByteAsString bool
-	MapStart     string
-	MapEnd       string
-	MapSep       string
-	RuneAsString bool
-	ShowType     bool
-}
+import ite "github.com/Matej-Chmel/go-any-to-string/internal"
+
+type Options = ite.Options
 
 func NewOptions() Options {
-	return Options{
-		ArrayStart:   "[",
-		ArrayEnd:     "]",
-		ArraySep:     " ",
-		ByteAsString: false,
-		MapStart:     "{",
-		MapEnd:       "}",
-		MapSep:       " ",
-		RuneAsString: false,
-		ShowType:     false,
-	}
+	return ite.NewOptions()
 }

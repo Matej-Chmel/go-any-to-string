@@ -4,6 +4,8 @@ import (
 	"io"
 	"reflect"
 	"strings"
+
+	ite "github.com/Matej-Chmel/go-any-to-string/internal"
 )
 
 func AnyToString(a any) string {
@@ -30,8 +32,8 @@ func ValueToString(val *reflect.Value) string {
 
 func ValueToStringCustom(val *reflect.Value, o Options) string {
 	var builder strings.Builder
-	c := newConverter(o, val, &builder)
-	err := c.run()
+	c := ite.NewConverter(o, val, &builder)
+	err := c.Run()
 
 	if err != nil {
 		return err.Error()
@@ -45,6 +47,6 @@ func ValueToWriter(val *reflect.Value, w io.Writer) error {
 }
 
 func ValueToWriterCustom(val *reflect.Value, o Options, w io.Writer) error {
-	c := newConverter(o, val, w)
-	return c.run()
+	c := ite.NewConverter(o, val, w)
+	return c.Run()
 }

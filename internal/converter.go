@@ -1,4 +1,4 @@
-package goanytostring
+package internal
 
 import (
 	"fmt"
@@ -12,20 +12,20 @@ import (
 	gs "github.com/Matej-Chmel/go-generic-stack"
 )
 
-type converter struct {
+type Converter struct {
 	builder strings.Builder
 	options Options
-	stack   gs.Stack[*item]
+	stack   gs.Stack[*Item]
 	writer  io.Writer
 }
 
-func newConverter(o Options, val *r.Value, writer io.Writer) converter {
-	c := converter{options: o, stack: gs.Stack[*item]{}, writer: writer}
-	c.push(top, 0, val)
+func NewConverter(o Options, val *r.Value, writer io.Writer) Converter {
+	c := Converter{options: o, stack: gs.Stack[*Item]{}, writer: writer}
+	c.push(Top, 0, val)
 	return c
 }
 
-func (c *converter) run() error {
+func (c *Converter) Run() error {
 	for c.stack.HasItems() {
 		top, _ := c.stack.Top()
 		err := c.processItem(top)
@@ -58,9 +58,9 @@ func formatType(t r.Type, top bool) (s string) {
 	return
 }
 
-func (c *converter) processItem(it *item) error {
-	if it.flag == top {
-		it.flag = none
+func (c *Converter) processItem(it *Item) error {
+	if it.flag == Top {
+		it.flag = None
 
 		if c.options.ShowType {
 			err := c.write(formatType(it.val.Type(), true))
@@ -71,7 +71,7 @@ func (c *converter) processItem(it *item) error {
 		}
 	}
 
-	if it.flag == structData {
+	if it.flag == StructData {
 		return c.processStruct(it)
 	}
 
@@ -79,7 +79,7 @@ func (c *converter) processItem(it *item) error {
 
 	switch kind {
 	case r.Array, r.Slice:
-		if it.flag > none {
+		if it.flag > None {
 			return c.processBytes(it)
 		}
 
@@ -87,12 +87,12 @@ func (c *converter) processItem(it *item) error {
 			elemKind := it.val.Type().Elem().Kind()
 
 			if c.options.ByteAsString && elemKind == r.Uint8 {
-				it.flag = bytes
+				it.flag = Bytes
 				return c.processBytes(it)
 			}
 
 			if c.options.RuneAsString && elemKind == r.Int32 {
-				it.flag = runes
+				it.flag = Runes
 				return c.processBytes(it)
 			}
 		}
@@ -109,9 +109,9 @@ func (c *converter) processItem(it *item) error {
 	c.stack.Pop()
 
 	if it.flag > 0 {
-		if it.flag == bytes {
+		if it.flag == Bytes {
 			return c.processByte(it.val)
-		} else if it.flag == runes {
+		} else if it.flag == Runes {
 			return c.processRune(it.val)
 		}
 	}
@@ -167,11 +167,11 @@ func (c *converter) processItem(it *item) error {
 	}
 }
 
-func (c *converter) push(f int, i int, v *r.Value) {
-	c.stack.Push(newItem(f, i, v))
+func (c *Converter) push(f int, i int, v *r.Value) {
+	c.stack.Push(NewItem(f, i, v))
 }
 
-func (c *converter) processArray(it *item) error {
+func (c *Converter) processArray(it *Item) error {
 	l := it.val.Len()
 
 	if it.ix == 0 {
@@ -198,13 +198,13 @@ func (c *converter) processArray(it *item) error {
 	}
 
 	elem := it.val.Index(it.ix)
-	c.push(none, 0, &elem)
+	c.push(None, 0, &elem)
 
 	it.ix++
 	return nil
 }
 
-func (c *converter) processBytes(it *item) error {
+func (c *Converter) processBytes(it *Item) error {
 	l := it.val.Len()
 
 	if it.ix == l {
@@ -219,8 +219,8 @@ func (c *converter) processBytes(it *item) error {
 	return nil
 }
 
-func (c *converter) processMap(it *item) error {
-	if it.flag == none && it.ix == 0 {
+func (c *Converter) processMap(it *Item) error {
+	if it.flag == None && it.ix == 0 {
 		it.keys = it.val.MapKeys()
 
 		err := c.write(c.options.MapStart)
@@ -229,8 +229,8 @@ func (c *converter) processMap(it *item) error {
 			return err
 		}
 
-		it.flag = keyNext
-	} else if it.flag == keyNext && it.ix < it.val.Len() {
+		it.flag = KeyNext
+	} else if it.flag == KeyNext && it.ix < it.val.Len() {
 		err := c.write(c.options.MapSep)
 
 		if err != nil {
@@ -249,21 +249,21 @@ func (c *converter) processMap(it *item) error {
 
 	key := it.keys[it.ix]
 
-	if it.flag == keyNext {
-		c.push(none, 0, &key)
-		it.flag = valueNext
-	} else if it.flag == valueNext {
+	if it.flag == KeyNext {
+		c.push(None, 0, &key)
+		it.flag = ValueNext
+	} else if it.flag == ValueNext {
 		c.writeRune(':')
 		val := it.val.MapIndex(key)
-		c.push(none, 0, &val)
-		it.flag = keyNext
+		c.push(None, 0, &val)
+		it.flag = KeyNext
 		it.ix++
 	}
 
 	return nil
 }
 
-func (c *converter) processPointer(it *item) error {
+func (c *Converter) processPointer(it *Item) error {
 	err := c.write("&")
 
 	if err != nil {
@@ -273,15 +273,15 @@ func (c *converter) processPointer(it *item) error {
 	elem := it.val.Elem()
 
 	if elem.Kind() == r.Struct {
-		it.flag = structData
+		it.flag = StructData
 	}
 
 	it.val = &elem
 	return nil
 }
 
-func (c *converter) processStruct(it *item) error {
-	if it.flag != structData {
+func (c *Converter) processStruct(it *Item) error {
+	if it.flag != StructData {
 		tmp := r.New(it.val.Type())
 		tmp.Elem().Set(*it.val)
 		elem := tmp.Elem()
@@ -314,26 +314,26 @@ func (c *converter) processStruct(it *item) error {
 	field := it.val.Field(it.ix)
 
 	if field.CanInterface() {
-		c.push(none, 0, &field)
+		c.push(None, 0, &field)
 	} else {
 		addr := unsafe.Pointer(field.UnsafeAddr())
 		data := r.NewAt(field.Type(), addr).Elem()
-		c.push(none, 0, &data)
+		c.push(None, 0, &data)
 	}
 
 	it.ix++
 	return nil
 }
 
-func (c *converter) processBool(val *r.Value) error {
+func (c *Converter) processBool(val *r.Value) error {
 	return c.write(strconv.FormatBool(val.Bool()))
 }
 
-func (c *converter) processByte(val *r.Value) error {
+func (c *Converter) processByte(val *r.Value) error {
 	return c.writeByte(byte(val.Uint()))
 }
 
-func (c *converter) processChan(val *r.Value) error {
+func (c *Converter) processChan(val *r.Value) error {
 	err := c.write("chan ")
 
 	if err != nil {
@@ -349,17 +349,17 @@ func floatToString(f float64, bitSize int) string {
 	return strings.TrimRight(s, ".")
 }
 
-func (c *converter) processComplex(val *r.Value) error {
+func (c *Converter) processComplex(val *r.Value) error {
 	realPart := floatToString(real(val.Complex()), 64)
 	imagPart := floatToString(imag(val.Complex()), 64)
 	return c.write(fmt.Sprintf("%s + %si", realPart, imagPart))
 }
 
-func (c *converter) processFloat(val *r.Value, bitSize int) error {
+func (c *Converter) processFloat(val *r.Value, bitSize int) error {
 	return c.write(floatToString(val.Float(), bitSize))
 }
 
-func (c *converter) processFunc(val *r.Value) error {
+func (c *Converter) processFunc(val *r.Value) error {
 	typ := val.Type()
 	in, out := typ.NumIn(), typ.NumOut()
 
@@ -429,44 +429,44 @@ func (c *converter) processFunc(val *r.Value) error {
 	return nil
 }
 
-func (c *converter) processInt(val *r.Value) error {
+func (c *Converter) processInt(val *r.Value) error {
 	return c.write(strconv.FormatInt(val.Int(), 10))
 }
 
-func (c *converter) processInterface(_ *r.Value) error {
+func (c *Converter) processInterface(_ *r.Value) error {
 	return c.write("interface{}")
 }
 
-func (c *converter) processRune(val *r.Value) error {
+func (c *Converter) processRune(val *r.Value) error {
 	return c.writeRune(rune(val.Int()))
 }
 
-func (c *converter) processString(val *r.Value) error {
+func (c *Converter) processString(val *r.Value) error {
 	return c.write(val.String())
 }
 
-func (c *converter) processUint(val *r.Value) error {
+func (c *Converter) processUint(val *r.Value) error {
 	return c.write(strconv.FormatUint(val.Uint(), 10))
 }
 
-func (c *converter) processUintptr(val *r.Value) error {
+func (c *Converter) processUintptr(val *r.Value) error {
 	return c.write(fmt.Sprintf("0x%X", val.Uint()))
 }
 
-func (c *converter) processUnsafe(val *r.Value) error {
+func (c *Converter) processUnsafe(val *r.Value) error {
 	return c.write(fmt.Sprintf("Ux%X", val.Pointer()))
 }
 
-func (c *converter) write(s string) error {
+func (c *Converter) write(s string) error {
 	_, err := c.builder.WriteString(s)
 	return err
 }
 
-func (c *converter) writeByte(b byte) error {
+func (c *Converter) writeByte(b byte) error {
 	return c.builder.WriteByte(b)
 }
 
-func (c *converter) writeRune(r rune) error {
+func (c *Converter) writeRune(r rune) error {
 	_, err := c.builder.WriteRune(r)
 	return err
 }
