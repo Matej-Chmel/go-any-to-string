@@ -39,6 +39,23 @@ func (c *Converter) Run() error {
 	return err
 }
 
+func countDimensions(val *r.Value) (d int) {
+	t := val.Type()
+
+	for {
+		kind := t.Kind()
+
+		if kind == r.Array || kind == r.Slice {
+			d++
+			t = t.Elem()
+		} else {
+			break
+		}
+	}
+
+	return
+}
+
 func formatType(t r.Type, top bool) (s string) {
 	switch t.Kind() {
 	case r.Array, r.Slice:
@@ -79,7 +96,7 @@ func (c *Converter) processItem(it *Item) error {
 
 	switch kind {
 	case r.Array, r.Slice:
-		if it.flag > None {
+		if it.flag == Bytes || it.flag == Runes {
 			return c.processBytes(it)
 		}
 
@@ -172,25 +189,33 @@ func (c *Converter) push(f int, i int, v *r.Value) {
 }
 
 func (c *Converter) processArray(it *Item) error {
-	l := it.val.Len()
+	if it.flag == None {
+		dim := countDimensions(it.val)
 
-	if it.ix == 0 {
-		err := c.write(c.options.ArrayStart)
+		if dim == 2 {
+			it.flag = Dim2
+		} else {
+			it.flag = OtherDim
+		}
+	}
 
-		if err != nil {
+	if it.flag == Dim2 {
+		return c.processArray2D(it)
+	}
+
+	if it.ix == 0 && it.flag != InnerDim {
+		if err := c.write(c.options.ArrayStart); err != nil {
 			return err
 		}
-	} else if it.ix < l {
-		err := c.write(c.options.ArraySep)
-
-		if err != nil {
+	} else if l := it.val.Len(); it.ix > 0 && it.ix < l {
+		if err := c.write(c.options.ArraySep); err != nil {
 			return err
 		}
 	} else if it.ix == l {
-		err := c.write(c.options.ArrayEnd)
-
-		if err != nil {
-			return err
+		if it.flag != InnerDim {
+			if err := c.write(c.options.ArrayEnd); err != nil {
+				return err
+			}
 		}
 
 		c.stack.Pop()
@@ -199,6 +224,23 @@ func (c *Converter) processArray(it *Item) error {
 
 	elem := it.val.Index(it.ix)
 	c.push(None, 0, &elem)
+
+	it.ix++
+	return nil
+}
+
+func (c *Converter) processArray2D(it *Item) error {
+	if l := it.val.Len(); it.ix > 0 && it.ix < l {
+		if err := c.write(c.options.ArraySep2D); err != nil {
+			return err
+		}
+	} else if it.ix == l {
+		c.stack.Pop()
+		return nil
+	}
+
+	elem := it.val.Index(it.ix)
+	c.push(InnerDim, 0, &elem)
 
 	it.ix++
 	return nil

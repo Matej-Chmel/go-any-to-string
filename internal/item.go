@@ -12,7 +12,10 @@ type Item struct {
 const (
 	None = iota
 	Bytes
+	Dim2
+	InnerDim
 	KeyNext
+	OtherDim
 	Runes
 	StructData
 	Top

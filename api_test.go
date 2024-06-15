@@ -2,6 +2,8 @@ package goanytostring_test
 
 import (
 	"fmt"
+	"io"
+	"os"
 	"runtime"
 	"strings"
 	"testing"
@@ -283,4 +285,32 @@ func TestStruct(t *testing.T) {
 	checkPtr(a, "&{12 hello *}", t, o)
 	checkPtr(b, "&{{34 world %} super X}", t, o)
 	checkPtr(c, "&{hello world [1 2 3]}", t, o)
+}
+
+func readFile(path string) string {
+	file, err := os.Open(path)
+
+	if err != nil {
+		return ""
+	}
+
+	data, err := io.ReadAll(file)
+
+	if err != nil {
+		return ""
+	}
+
+	res := strings.TrimSpace(string(data))
+	return strings.ReplaceAll(res, "\r", "")
+}
+
+func TestDimensions(t *testing.T) {
+	dim2 := [][]int32{
+		{1, 2, 3},
+		{4, 5, 6},
+		{7, 8, 9},
+	}
+	dim2Exp := readFile("test_data/dim2.txt")
+
+	check(dim2, dim2Exp, t)
 }
