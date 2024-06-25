@@ -13,10 +13,11 @@ import (
 )
 
 type Converter struct {
-	builder strings.Builder
-	options Options
-	stack   gs.Stack[*Item]
-	writer  io.Writer
+	builder  strings.Builder
+	debugStr string
+	options  Options
+	stack    gs.Stack[*Item]
+	writer   io.Writer
 }
 
 func NewConverter(o Options, val *r.Value, writer io.Writer) Converter {
@@ -25,21 +26,7 @@ func NewConverter(o Options, val *r.Value, writer io.Writer) Converter {
 	return c
 }
 
-func (c *Converter) Run() error {
-	for c.stack.HasItems() {
-		top, _ := c.stack.Top()
-		err := c.processItem(top)
-
-		if err != nil {
-			return err
-		}
-	}
-
-	_, err := c.writer.Write([]byte(c.builder.String()))
-	return err
-}
-
-func countDimensions(val *r.Value) (d int) {
+func countDimensions(val *r.Value) (d uint32) {
 	t := val.Type()
 
 	for {
@@ -75,29 +62,140 @@ func formatType(t r.Type, top bool) (s string) {
 	return
 }
 
-func (c *Converter) processItem(it *Item) error {
+func (c *Converter) displayType(it *Item) {
 	if it.flag == Top {
 		it.flag = None
 
 		if c.options.ShowType {
-			err := c.write(formatType(it.val.Type(), true))
+			c.write(formatType(it.val.Type(), true))
+		}
+	}
+}
 
-			if err != nil {
-				return err
+func (c *Converter) processArray(it *Item) {
+	var currentDim uint32
+
+	if it.dim == 0 {
+		currentDim = countDimensions(it.val)
+		it.SetCurrentDim(currentDim)
+		it.SetOriginalDim(currentDim)
+	} else {
+		currentDim = it.GetCurrentDim()
+	}
+
+	if currentDim >= 2 && currentDim <= 3 {
+		c.processArray2D3D(it, currentDim)
+		return
+	}
+
+	var indent int
+
+	if origDim := it.GetOriginalDim(); origDim <= 3 {
+		indent = 0
+	} else {
+		indent = int(origDim - max(currentDim, 3))
+	}
+
+	length := it.val.Len()
+
+	if it.ix == 0 {
+		for i := 0; i < indent; i++ {
+			c.write(c.options.DimIndent)
+		}
+
+		if it.flag != InnerDim {
+			c.write(c.options.ArrayStart)
+
+			if currentDim > 3 {
+				c.write(c.options.ArraySep2D)
 			}
+		}
+	} else if it.ix > 0 && it.ix < length {
+		var sep string
+
+		if currentDim > 3 {
+			sep = c.options.ArraySep2D
+		} else {
+			sep = c.options.ArraySep
+		}
+
+		c.write(sep)
+
+		if currentDim > 3 {
+			for i := 0; i < indent; i++ {
+				c.write(c.options.DimIndent)
+			}
+
+			c.write(c.options.ArrayEnd)
+			c.write(c.options.ArraySep2D)
+
+			for i := 0; i < indent; i++ {
+				c.write(c.options.DimIndent)
+			}
+
+			c.write(c.options.ArrayStart)
+			c.write(c.options.ArraySep2D)
+		}
+	} else if it.ix == length {
+		if currentDim > 3 {
+			c.write(c.options.ArraySep2D)
+
+			for i := 0; i < indent; i++ {
+				c.write(c.options.DimIndent)
+			}
+		}
+
+		if it.flag != InnerDim {
+			c.write(c.options.ArrayEnd)
 		}
 	}
 
-	if it.flag == StructData {
-		return c.processStruct(it)
+	if it.ix == length {
+		c.stack.Pop()
+	} else {
+		c.pushArrayItem(it, currentDim)
+	}
+}
+
+func (c *Converter) processArray2D3D(it *Item, currentDim uint32) {
+	if l := it.val.Len(); it.ix > 0 && it.ix < l {
+		var sep string
+
+		if currentDim == 2 {
+			sep = c.options.ArraySep2D
+		} else {
+			sep = c.options.ArraySep3D
+		}
+
+		c.write(sep)
+	} else if it.ix == l {
+		c.stack.Pop()
+		return
 	}
 
-	kind := it.val.Kind()
+	c.pushArrayItem(it, currentDim)
+}
 
+func (c *Converter) processBytes(it *Item) {
+	l := it.val.Len()
+
+	if it.ix == l {
+		c.stack.Pop()
+		return
+	}
+
+	elem := it.val.Index(it.ix)
+	c.push(it.flag, 0, &elem)
+
+	it.ix++
+}
+
+func (c *Converter) processComposites(it *Item, kind r.Kind) bool {
 	switch kind {
 	case r.Array, r.Slice:
 		if it.flag == Bytes || it.flag == Runes {
-			return c.processBytes(it)
+			c.processBytes(it)
+			return true
 		}
 
 		if it.ix == 0 {
@@ -105,188 +203,120 @@ func (c *Converter) processItem(it *Item) error {
 
 			if c.options.ByteAsString && elemKind == r.Uint8 {
 				it.flag = Bytes
-				return c.processBytes(it)
+				c.processBytes(it)
+				return true
 			}
 
 			if c.options.RuneAsString && elemKind == r.Int32 {
 				it.flag = Runes
-				return c.processBytes(it)
+				c.processBytes(it)
+				return true
 			}
 		}
 
-		return c.processArray(it)
+		c.processArray(it)
 	case r.Map:
-		return c.processMap(it)
+		c.processMap(it)
 	case r.Pointer:
-		return c.processPointer(it)
+		c.processPointer(it)
 	case r.Struct:
-		return c.processStruct(it)
+		c.processStruct(it)
+	default:
+		return false
+	}
+
+	return true
+}
+
+func (c *Converter) processFlaggedBytes(it *Item) bool {
+	if it.flag == Bytes {
+		c.processByte(it.val)
+		return true
+	}
+
+	if it.flag == Runes {
+		c.processRune(it.val)
+		return true
+	}
+
+	return false
+}
+
+func (c *Converter) processLeaf(it *Item, kind r.Kind) {
+	switch kind {
+	case r.Bool:
+		c.processBool(it.val)
+	case r.Chan:
+		c.processChan(it.val)
+	case r.Complex64, r.Complex128:
+		c.processComplex(it.val)
+	case r.Float32:
+		c.processFloat(it.val, 32)
+	case r.Float64:
+		c.processFloat(it.val, 64)
+	case r.Func:
+		c.processFunc(it.val)
+
+	case r.Int32:
+		if c.options.RuneAsString {
+			c.processRune(it.val)
+		} else {
+			c.processInt(it.val)
+		}
+
+	case r.Int, r.Int8, r.Int16, r.Int64:
+		c.processInt(it.val)
+	case r.Interface, r.Invalid:
+		c.processInterface(it.val)
+	case r.Uint, r.Uint16, r.Uint32, r.Uint64:
+		c.processUint(it.val)
+
+	case r.Uint8:
+		if c.options.ByteAsString {
+			c.processByte(it.val)
+		} else {
+			c.processUint(it.val)
+		}
+
+	case r.String:
+		c.processString(it.val)
+	case r.Uintptr:
+		c.processUintptr(it.val)
+	case r.UnsafePointer:
+		c.processUnsafe(it.val)
+	default:
+		c.write(kind.String())
+	}
+}
+
+func (c *Converter) processItem(it *Item) {
+	c.displayType(it)
+	kind := it.val.Kind()
+
+	if processed := c.processComposites(it, kind); processed {
+		return
 	}
 
 	c.stack.Pop()
 
-	if it.flag > 0 {
-		if it.flag == Bytes {
-			return c.processByte(it.val)
-		} else if it.flag == Runes {
-			return c.processRune(it.val)
-		}
+	if processed := c.processFlaggedBytes(it); processed {
+		return
 	}
 
-	switch kind {
-
-	case r.Bool:
-		return c.processBool(it.val)
-	case r.Chan:
-		return c.processChan(it.val)
-	case r.Complex64, r.Complex128:
-		return c.processComplex(it.val)
-	case r.Float32:
-		return c.processFloat(it.val, 32)
-	case r.Float64:
-		return c.processFloat(it.val, 64)
-	case r.Func:
-		return c.processFunc(it.val)
-
-	case r.Int32:
-		if c.options.RuneAsString {
-			return c.processRune(it.val)
-		}
-
-		return c.processInt(it.val)
-
-	case r.Int, r.Int8, r.Int16, r.Int64:
-		return c.processInt(it.val)
-
-	case r.Interface, r.Invalid:
-		return c.processInterface(it.val)
-
-	case r.Uint, r.Uint16, r.Uint32, r.Uint64:
-		return c.processUint(it.val)
-
-	case r.Uint8:
-		if c.options.ByteAsString {
-			return c.processByte(it.val)
-		}
-
-		return c.processUint(it.val)
-
-	case r.String:
-		return c.processString(it.val)
-
-	case r.Uintptr:
-		return c.processUintptr(it.val)
-	case r.UnsafePointer:
-		return c.processUnsafe(it.val)
-
-	default:
-		return c.write(kind.String())
-	}
+	c.processLeaf(it, kind)
 }
 
-func (c *Converter) push(f int, i int, v *r.Value) {
-	c.stack.Push(NewItem(f, i, v))
-}
-
-func (c *Converter) processArray(it *Item) error {
-	if it.flag == None {
-		dim := countDimensions(it.val)
-
-		if dim == 2 {
-			it.flag = Dim2
-		} else {
-			it.flag = OtherDim
-		}
-	}
-
-	if it.flag == Dim2 {
-		return c.processArray2D(it)
-	}
-
-	if it.ix == 0 && it.flag != InnerDim {
-		if err := c.write(c.options.ArrayStart); err != nil {
-			return err
-		}
-	} else if l := it.val.Len(); it.ix > 0 && it.ix < l {
-		if err := c.write(c.options.ArraySep); err != nil {
-			return err
-		}
-	} else if it.ix == l {
-		if it.flag != InnerDim {
-			if err := c.write(c.options.ArrayEnd); err != nil {
-				return err
-			}
-		}
-
-		c.stack.Pop()
-		return nil
-	}
-
-	elem := it.val.Index(it.ix)
-	c.push(None, 0, &elem)
-
-	it.ix++
-	return nil
-}
-
-func (c *Converter) processArray2D(it *Item) error {
-	if l := it.val.Len(); it.ix > 0 && it.ix < l {
-		if err := c.write(c.options.ArraySep2D); err != nil {
-			return err
-		}
-	} else if it.ix == l {
-		c.stack.Pop()
-		return nil
-	}
-
-	elem := it.val.Index(it.ix)
-	c.push(InnerDim, 0, &elem)
-
-	it.ix++
-	return nil
-}
-
-func (c *Converter) processBytes(it *Item) error {
-	l := it.val.Len()
-
-	if it.ix == l {
-		c.stack.Pop()
-		return nil
-	}
-
-	elem := it.val.Index(it.ix)
-	c.push(it.flag, 0, &elem)
-
-	it.ix++
-	return nil
-}
-
-func (c *Converter) processMap(it *Item) error {
+func (c *Converter) processMap(it *Item) {
 	if it.flag == None && it.ix == 0 {
-		it.keys = it.val.MapKeys()
-
-		err := c.write(c.options.MapStart)
-
-		if err != nil {
-			return err
-		}
-
 		it.flag = KeyNext
+		it.keys = it.val.MapKeys()
+		c.write(c.options.MapStart)
 	} else if it.flag == KeyNext && it.ix < it.val.Len() {
-		err := c.write(c.options.MapSep)
-
-		if err != nil {
-			return err
-		}
+		c.write(c.options.MapSepVal)
 	} else if it.ix == it.val.Len() {
-		err := c.write(c.options.MapEnd)
-
-		if err != nil {
-			return err
-		}
-
+		c.write(c.options.MapEnd)
 		c.stack.Pop()
-		return nil
+		return
 	}
 
 	key := it.keys[it.ix]
@@ -295,23 +325,16 @@ func (c *Converter) processMap(it *Item) error {
 		c.push(None, 0, &key)
 		it.flag = ValueNext
 	} else if it.flag == ValueNext {
-		c.writeRune(':')
+		c.write(c.options.MapSepKey)
 		val := it.val.MapIndex(key)
 		c.push(None, 0, &val)
 		it.flag = KeyNext
 		it.ix++
 	}
-
-	return nil
 }
 
-func (c *Converter) processPointer(it *Item) error {
-	err := c.write("&")
-
-	if err != nil {
-		return err
-	}
-
+func (c *Converter) processPointer(it *Item) {
+	c.write("&")
 	elem := it.val.Elem()
 
 	if elem.Kind() == r.Struct {
@@ -319,10 +342,9 @@ func (c *Converter) processPointer(it *Item) error {
 	}
 
 	it.val = &elem
-	return nil
 }
 
-func (c *Converter) processStruct(it *Item) error {
+func (c *Converter) processStruct(it *Item) {
 	if it.flag != StructData {
 		tmp := r.New(it.val.Type())
 		tmp.Elem().Set(*it.val)
@@ -331,26 +353,13 @@ func (c *Converter) processStruct(it *Item) error {
 	}
 
 	if it.ix == 0 {
-		err := c.writeRune('{')
-
-		if err != nil {
-			return err
-		}
+		c.write(c.options.StructStart)
 	} else if it.ix < it.val.NumField() {
-		err := c.writeRune(' ')
-
-		if err != nil {
-			return err
-		}
+		c.write(c.options.StructSep)
 	} else if it.ix == it.val.NumField() {
-		err := c.writeRune('}')
-
-		if err != nil {
-			return err
-		}
-
+		c.write(c.options.StructEnd)
 		c.stack.Pop()
-		return nil
+		return
 	}
 
 	field := it.val.Field(it.ix)
@@ -364,25 +373,19 @@ func (c *Converter) processStruct(it *Item) error {
 	}
 
 	it.ix++
-	return nil
 }
 
-func (c *Converter) processBool(val *r.Value) error {
-	return c.write(strconv.FormatBool(val.Bool()))
+func (c *Converter) processBool(val *r.Value) {
+	c.write(strconv.FormatBool(val.Bool()))
 }
 
-func (c *Converter) processByte(val *r.Value) error {
-	return c.writeByte(byte(val.Uint()))
+func (c *Converter) processByte(val *r.Value) {
+	c.writeByte(byte(val.Uint()))
 }
 
-func (c *Converter) processChan(val *r.Value) error {
-	err := c.write("chan ")
-
-	if err != nil {
-		return err
-	}
-
-	return c.write(val.Type().Elem().String())
+func (c *Converter) processChan(val *r.Value) {
+	c.write("chan ")
+	c.write(val.Type().Elem().String())
 }
 
 func floatToString(f float64, bitSize int) string {
@@ -391,124 +394,121 @@ func floatToString(f float64, bitSize int) string {
 	return strings.TrimRight(s, ".")
 }
 
-func (c *Converter) processComplex(val *r.Value) error {
+func (c *Converter) processComplex(val *r.Value) {
 	realPart := floatToString(real(val.Complex()), 64)
 	imagPart := floatToString(imag(val.Complex()), 64)
-	return c.write(fmt.Sprintf("%s + %si", realPart, imagPart))
+	c.write(fmt.Sprintf("%s + %si", realPart, imagPart))
 }
 
-func (c *Converter) processFloat(val *r.Value, bitSize int) error {
-	return c.write(floatToString(val.Float(), bitSize))
+func (c *Converter) processFloat(val *r.Value, bitSize int) {
+	c.write(floatToString(val.Float(), bitSize))
 }
 
-func (c *Converter) processFunc(val *r.Value) error {
+func (c *Converter) processFunc(val *r.Value) {
 	typ := val.Type()
 	in, out := typ.NumIn(), typ.NumOut()
 
 	name := runtime.FuncForPC(val.Pointer()).Name()
 	parts := strings.Split(name, ".")
 	lastIx := len(parts) - 1
-	// pkg := strings.Join(parts[:lastIx])
 	funcName := parts[lastIx]
 
-	err := c.write(funcName)
-	if err != nil {
-		return err
-	}
-
-	err = c.writeRune('(')
-	if err != nil {
-		return err
-	}
+	c.write(funcName)
+	c.write(c.options.FuncStart)
 
 	for i := 0; i < in; i++ {
 		if i > 0 {
-			err = c.write(", ")
-			if err != nil {
-				return err
-			}
+			c.write(c.options.FuncSep)
 		}
 
-		err = c.write(typ.In(i).String())
-		if err != nil {
-			return err
-		}
+		c.write(typ.In(i).String())
 	}
 
-	err = c.write(") ")
-	if err != nil {
-		return err
-	}
+	c.write(c.options.FuncEnd)
+	c.write(c.options.FuncSepInOut)
 
 	if out > 1 {
-		err = c.writeRune('(')
-		if err != nil {
-			return err
-		}
+		c.write(c.options.FuncStart)
 	}
 
 	for i := 0; i < out; i++ {
 		if i > 0 {
-			err = c.write(", ")
-			if err != nil {
-				return err
-			}
+			c.write(c.options.FuncSep)
 		}
 
-		err = c.write(typ.Out(i).String())
-		if err != nil {
-			return err
-		}
+		c.write(typ.Out(i).String())
 	}
 
 	if out > 1 {
-		err = c.writeRune(')')
-		if err != nil {
-			return err
-		}
+		c.write(c.options.FuncEnd)
+	}
+}
+
+func (c *Converter) processInt(val *r.Value) {
+	c.write(strconv.FormatInt(val.Int(), 10))
+}
+
+func (c *Converter) processInterface(_ *r.Value) {
+	c.write("interface{}")
+}
+
+func (c *Converter) processRune(val *r.Value) {
+	c.writeRune(rune(val.Int()))
+}
+
+func (c *Converter) processString(val *r.Value) {
+	c.write(val.String())
+}
+
+func (c *Converter) processUint(val *r.Value) {
+	c.write(strconv.FormatUint(val.Uint(), 10))
+}
+
+func (c *Converter) processUintptr(val *r.Value) {
+	c.write(fmt.Sprintf("0x%X", val.Uint()))
+}
+
+func (c *Converter) processUnsafe(val *r.Value) {
+	c.write(fmt.Sprintf("Ux%X", val.Pointer()))
+}
+
+func (c *Converter) push(flag int, index int, val *r.Value) {
+	c.stack.Push(NewItem(flag, index, val))
+}
+
+func (c *Converter) pushArrayItem(it *Item, currentDim uint32) {
+	elem := it.val.Index(it.ix)
+	newItem := NewItem(InnerDim, 0, &elem)
+	newItem.dim = it.dim
+	newItem.SetCurrentDim(currentDim - 1)
+	c.stack.Push(newItem)
+	it.ix++
+}
+
+func (c *Converter) Run() error {
+	for c.stack.HasItems() {
+		top, _ := c.stack.Top()
+		c.processItem(top)
 	}
 
-	return nil
-}
-
-func (c *Converter) processInt(val *r.Value) error {
-	return c.write(strconv.FormatInt(val.Int(), 10))
-}
-
-func (c *Converter) processInterface(_ *r.Value) error {
-	return c.write("interface{}")
-}
-
-func (c *Converter) processRune(val *r.Value) error {
-	return c.writeRune(rune(val.Int()))
-}
-
-func (c *Converter) processString(val *r.Value) error {
-	return c.write(val.String())
-}
-
-func (c *Converter) processUint(val *r.Value) error {
-	return c.write(strconv.FormatUint(val.Uint(), 10))
-}
-
-func (c *Converter) processUintptr(val *r.Value) error {
-	return c.write(fmt.Sprintf("0x%X", val.Uint()))
-}
-
-func (c *Converter) processUnsafe(val *r.Value) error {
-	return c.write(fmt.Sprintf("Ux%X", val.Pointer()))
-}
-
-func (c *Converter) write(s string) error {
-	_, err := c.builder.WriteString(s)
+	_, err := c.writer.Write([]byte(c.builder.String()))
 	return err
 }
 
-func (c *Converter) writeByte(b byte) error {
-	return c.builder.WriteByte(b)
+func (c *Converter) write(s string) {
+	c.builder.WriteString(s)
+
+	if len(c.debugStr) > 12 {
+		c.debugStr = ""
+	}
+
+	c.debugStr += s
 }
 
-func (c *Converter) writeRune(r rune) error {
-	_, err := c.builder.WriteRune(r)
-	return err
+func (c *Converter) writeByte(b byte) {
+	c.builder.WriteByte(b)
+}
+
+func (c *Converter) writeRune(r rune) {
+	c.builder.WriteRune(r)
 }

@@ -31,11 +31,16 @@ func checkImpl[T any](skip int, data T, expected string, t *testing.T, o ...ats.
 
 	_, _, line, ok := runtime.Caller(skip)
 
+	var builder strings.Builder
+
 	if ok {
-		t.Errorf("(line %d) %s != %s", line, actual, expected)
-	} else {
-		t.Errorf("%s != %s", actual, expected)
+		s := fmt.Sprintf("\n\nLine %d", line)
+		builder.WriteString(s)
 	}
+
+	s := fmt.Sprintf("\n\n%s\n\n!=\n\n%s\n\n", actual, expected)
+	builder.WriteString(s)
+	t.Error(builder.String())
 }
 
 func checkPtr[T any](data T, expected string, t *testing.T, o ...ats.Options) {
@@ -129,7 +134,7 @@ func TestFormat(t *testing.T) {
 	o.ArraySep = ", "
 	o.MapStart = ":: "
 	o.MapEnd = "!"
-	o.MapSep = " - "
+	o.MapSepVal = " - "
 
 	check(a, "<< 4, 5, 6 >>", t, o)
 
@@ -138,7 +143,7 @@ func TestFormat(t *testing.T) {
 	mustEndWith(actual, o.MapEnd, t)
 	mustContain(actual, "12:hello", t)
 	mustContain(actual, "34:world", t)
-	mustContain(actual, o.MapSep, t)
+	mustContain(actual, o.MapSepVal, t)
 
 	o.ShowType = true
 	check(a, "[]int << 4, 5, 6 >>", t, o)
@@ -304,13 +309,70 @@ func readFile(path string) string {
 	return strings.ReplaceAll(res, "\r", "")
 }
 
-func TestDimensions(t *testing.T) {
-	dim2 := [][]int32{
+func Test2D(t *testing.T) {
+	data := [][]int32{
 		{1, 2, 3},
-		{4, 5, 6},
-		{7, 8, 9},
+		{4, -5, 6},
+		{7, 8, -9, 0, 1},
 	}
-	dim2Exp := readFile("test_data/dim2.txt")
+	exp := readFile("test_data/2D.txt")
+	check(data, exp, t)
+}
 
-	check(dim2, dim2Exp, t)
+func Test3D(t *testing.T) {
+	data := [][][]int32{
+		{
+			{-1, -2, -3},
+			{4, 5, 6},
+			{7, 8, 9},
+		},
+		{
+			{0, 0, 6},
+			{0, 0},
+		},
+		{
+			{1, 1, -1, -1, 0},
+			{0},
+			{1, 1},
+		},
+	}
+	exp := readFile("test_data/3D.txt")
+	check(data, exp, t)
+}
+
+func Test4D(t *testing.T) {
+	data := [][][][]int32{
+		{
+			{
+				{1, 2, 3},
+				{4, 5, 6},
+				{7, 8, 9},
+			},
+			{
+				{-4, -5, -6},
+				{-7, -8, -9},
+				{-1, -2, -3},
+			},
+		},
+		{
+			{
+				{0, 0},
+				{0, 0},
+				{0},
+			},
+			{
+				{100, 10},
+				{1000, 10},
+				{100_000_000},
+			},
+		},
+		{
+			{
+				{-1, 1},
+				{1, -1},
+			},
+		},
+	}
+	exp := readFile("test_data/4D.txt")
+	check(data, exp, t)
 }
