@@ -23,8 +23,8 @@ type Options struct {
 	StructSep    string
 }
 
-func NewOptions() Options {
-	return Options{
+func NewOptions() *Options {
+	return &Options{
 		ArrayStart:   "[",
 		ArrayEnd:     "]",
 		ArraySep:     " ",

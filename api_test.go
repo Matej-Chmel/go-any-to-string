@@ -12,11 +12,11 @@ import (
 	ats "github.com/Matej-Chmel/go-any-to-string"
 )
 
-func check[T any](data T, expected string, t *testing.T, o ...ats.Options) {
+func check[T any](data T, expected string, t *testing.T, o ...*ats.Options) {
 	checkImpl(2, data, expected, t, o...)
 }
 
-func checkImpl[T any](skip int, data T, expected string, t *testing.T, o ...ats.Options) {
+func checkImpl[T any](skip int, data T, expected string, t *testing.T, o ...*ats.Options) {
 	var actual string
 
 	if len(o) > 0 {
@@ -43,7 +43,7 @@ func checkImpl[T any](skip int, data T, expected string, t *testing.T, o ...ats.
 	t.Error(builder.String())
 }
 
-func checkPtr[T any](data T, expected string, t *testing.T, o ...ats.Options) {
+func checkPtr[T any](data T, expected string, t *testing.T, o ...*ats.Options) {
 	checkImpl(2, &data, expected, t, o...)
 }
 

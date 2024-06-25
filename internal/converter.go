@@ -15,12 +15,12 @@ import (
 type Converter struct {
 	builder  strings.Builder
 	debugStr string
-	options  Options
+	options  *Options
 	stack    gs.Stack[*Item]
 	writer   io.Writer
 }
 
-func NewConverter(o Options, val *r.Value, writer io.Writer) Converter {
+func NewConverter(o *Options, val *r.Value, writer io.Writer) Converter {
 	c := Converter{options: o, stack: gs.Stack[*Item]{}, writer: writer}
 	c.push(Top, 0, val)
 	return c
