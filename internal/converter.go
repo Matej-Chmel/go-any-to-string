@@ -334,13 +334,18 @@ func (c *Converter) processMap(it *Item) {
 }
 
 func (c *Converter) processPointer(it *Item) {
-	c.write("&")
 	elem := it.val.Elem()
 
 	if elem.Kind() == r.Struct {
 		it.flag = StructData
+
+		if c.processStructCustom(it) {
+			c.stack.Pop()
+			return
+		}
 	}
 
+	c.write("&")
 	it.val = &elem
 }
 
@@ -349,7 +354,13 @@ func (c *Converter) processStruct(it *Item) {
 		tmp := r.New(it.val.Type())
 		tmp.Elem().Set(*it.val)
 		elem := tmp.Elem()
+		it.flag = StructData
 		it.val = &elem
+
+		if c.processStructCustom(it) {
+			c.stack.Pop()
+			return
+		}
 	}
 
 	if it.ix == 0 {
@@ -362,9 +373,7 @@ func (c *Converter) processStruct(it *Item) {
 		return
 	}
 
-	field := it.val.Field(it.ix)
-
-	if field.CanInterface() {
+	if field := it.val.Field(it.ix); field.CanInterface() {
 		c.push(None, 0, &field)
 	} else {
 		addr := unsafe.Pointer(field.UnsafeAddr())
@@ -373,6 +382,19 @@ func (c *Converter) processStruct(it *Item) {
 	}
 
 	it.ix++
+}
+
+func (c *Converter) processStructCustom(it *Item) bool {
+	if method := it.val.MethodByName("String"); method.IsValid() {
+		res := method.Call(nil)
+
+		if len(res) == 1 && res[0].Kind() == r.String {
+			c.write(res[0].String())
+			return true
+		}
+	}
+
+	return false
 }
 
 func (c *Converter) processBool(val *r.Value) {

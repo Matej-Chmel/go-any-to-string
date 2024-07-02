@@ -263,6 +263,16 @@ type Example struct {
 	c rune
 }
 
+type ExampleCustom struct {
+	a rune
+	b rune
+	c rune
+}
+
+func (e ExampleCustom) String() string {
+	return fmt.Sprintf("%c -> %c -> %c", e.a, e.b, e.c)
+}
+
 type NestedExample struct {
 	Example
 	b string
@@ -278,6 +288,7 @@ func TestStruct(t *testing.T) {
 	a := Example{12, "hello", '*'}
 	b := NestedExample{Example{34, "world", '%'}, "super", 'X'}
 	c := SliceExample{[]byte("hello world"), []int{1, 2, 3}}
+	d := ExampleCustom{'A', 'b', 'C'}
 
 	o := ats.NewOptions()
 	o.ByteAsString = true
@@ -286,10 +297,12 @@ func TestStruct(t *testing.T) {
 	check(a, "{12 hello *}", t, o)
 	check(b, "{{34 world %} super X}", t, o)
 	check(c, "{hello world [1 2 3]}", t, o)
+	check(d, "A -> b -> C", t, o)
 
 	checkPtr(a, "&{12 hello *}", t, o)
 	checkPtr(b, "&{{34 world %} super X}", t, o)
 	checkPtr(c, "&{hello world [1 2 3]}", t, o)
+	checkPtr(d, "A -> b -> C", t, o)
 }
 
 func readFile(path string) string {
