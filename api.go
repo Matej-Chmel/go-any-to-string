@@ -3,50 +3,76 @@ package goanytostring
 import (
 	"io"
 	"reflect"
-	"strings"
 
 	ite "github.com/Matej-Chmel/go-any-to-string/internal"
 )
 
+// Convert any variable to a string
 func AnyToString(a any) string {
 	return AnyToStringCustom(a, NewOptions())
 }
 
+// Convert any variable to a string according to specified Options
 func AnyToStringCustom(a any, o *Options) string {
 	val := reflect.ValueOf(a)
 	return ValueToStringCustom(&val, o)
 }
 
+// Write any variable to a Writer
 func AnyToWriter(a any, w io.Writer) error {
 	return AnyToWriterCustom(a, NewOptions(), w)
 }
 
+// Write any variable to a Writer according to specified Options
 func AnyToWriterCustom(a any, o *Options, w io.Writer) error {
 	val := reflect.ValueOf(a)
 	return ValueToWriterCustom(&val, o, w)
 }
 
+// Convert Value to string
 func ValueToString(val *reflect.Value) string {
 	return ValueToStringCustom(val, NewOptions())
 }
 
+// Convert Value to string according to specified Options
 func ValueToStringCustom(val *reflect.Value, o *Options) string {
-	var builder strings.Builder
-	c := ite.NewConverter(o, val, &builder)
-	err := c.Run()
-
-	if err != nil {
-		return err.Error()
+	if ite.IsCompositeType(val) {
+		c := ite.NewCompositeConverter(o, val)
+		return c.ConvertStackToString()
 	}
 
-	return builder.String()
+	c := ite.NewLeafConverter(o)
+
+	if o.ShowType {
+		return c.FormatBuiltInType(val) + " " + c.ConvertToString(val)
+	}
+
+	return c.ConvertToString(val)
 }
 
+// Write a Value to a Writer
 func ValueToWriter(val *reflect.Value, w io.Writer) error {
 	return ValueToWriterCustom(val, NewOptions(), w)
 }
 
+// Write a Value to a Writer according to specified Options
 func ValueToWriterCustom(val *reflect.Value, o *Options, w io.Writer) error {
-	c := ite.NewConverter(o, val, w)
-	return c.Run()
+	if ite.IsCompositeType(val) {
+		c := ite.NewCompositeConverter(o, val)
+		return write(c.ConvertStackToString(), w)
+	}
+
+	c := ite.NewLeafConverter(o)
+
+	if o.ShowType {
+		return write(c.FormatBuiltInType(val)+" "+c.ConvertToString(val), w)
+	}
+
+	return write(c.ConvertToString(val), w)
+}
+
+// Internal function that writes a string to a Writer
+func write(data string, w io.Writer) error {
+	_, err := w.Write([]byte(data))
+	return err
 }

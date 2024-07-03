@@ -1,13 +1,3 @@
-# Any to string
-Convert any variable to a string with various formatting options.
-
-## Installation
-```bash
-go get github.com/Matej-Chmel/go-any-to-string@v1.0.8
-```
-
-## Example
-```go
 package main
 
 import (
@@ -38,12 +28,3 @@ func main() {
 	options.ByteAsString = true
 	fmt.Println(at.AnyToStringCustom(bytes, options))
 }
-```
-
-### Output
-```none
-{1 2}
-4.57
-[false - true - false]
-Hello
-```
