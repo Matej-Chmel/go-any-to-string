@@ -14,6 +14,9 @@ type Item struct {
 	ix int
 	// If Item is a map, the order of keys is saved here
 	keys []reflect.Value
+	// If Item is a struct and field names should be written,
+	// save the type
+	typ reflect.Type
 	// The reflection data of this Item
 	val *reflect.Value
 }
@@ -42,6 +45,7 @@ func NewItem(flag uint, index int, val *reflect.Value) *Item {
 		flag: flag,
 		ix:   index,
 		keys: nil,
+		typ:  nil,
 		val:  val,
 	}
 }

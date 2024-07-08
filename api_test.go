@@ -12,11 +12,36 @@ import (
 	ats "github.com/Matej-Chmel/go-any-to-string"
 )
 
-func check[T any](data T, expected string, t *testing.T, o ...*ats.Options) {
+// Wrapper around the original test type
+type tester struct {
+	failed bool
+	*testing.T
+}
+
+func newTester(t *testing.T) *tester {
+	return &tester{failed: false, T: t}
+}
+
+func (t *tester) fail(skip int, format string, data ...any) {
+	_, _, line, ok := runtime.Caller(skip)
+
+	if ok {
+		format = fmt.Sprintf("(line %d) %s", line, format)
+	}
+
+	t.Errorf(format, data...)
+	t.failed = true
+}
+
+func check[T any](data T, expected string, t *tester, o ...*ats.Options) {
 	checkImpl(2, data, expected, t, o...)
 }
 
-func checkImpl[T any](skip int, data T, expected string, t *testing.T, o ...*ats.Options) {
+func checkImpl[T any](skip int, data T, expected string, t *tester, o ...*ats.Options) {
+	if t.failed {
+		return
+	}
+
 	var actual string
 
 	if len(o) > 0 {
@@ -29,25 +54,15 @@ func checkImpl[T any](skip int, data T, expected string, t *testing.T, o ...*ats
 		return
 	}
 
-	_, _, line, ok := runtime.Caller(skip)
-
-	var builder strings.Builder
-
-	if ok {
-		s := fmt.Sprintf("\n\nLine %d", line)
-		builder.WriteString(s)
-	}
-
-	s := fmt.Sprintf("\n\n%s\n\n!=\n\n%s\n\n", actual, expected)
-	builder.WriteString(s)
-	t.Error(builder.String())
+	t.fail(skip, "\n\n%s\n\n!=\n\n%s", actual, expected)
 }
 
-func checkPtr[T any](data T, expected string, t *testing.T, o ...*ats.Options) {
+func checkPtr[T any](data T, expected string, t *tester, o ...*ats.Options) {
 	checkImpl(2, &data, expected, t, o...)
 }
 
-func TestArrays(t *testing.T) {
+func TestArrays(ot *testing.T) {
+	t := newTester(ot)
 	check([...]bool{false, true}, "[false true]", t)
 	check([...]byte{12, 34}, "[12 34]", t)
 	check([...]int{1, 2, 3}, "[1 2 3]", t)
@@ -63,7 +78,8 @@ func TestArrays(t *testing.T) {
 	check([]rune{'A', 'B'}, "AB", t, o)
 }
 
-func TestArrayPointers(t *testing.T) {
+func TestArrayPointers(ot *testing.T) {
+	t := newTester(ot)
 	checkPtr([...]bool{false, true}, "&[false true]", t)
 	checkPtr([...]byte{12, 34}, "&[12 34]", t)
 	checkPtr([...]int{1, 2, 3}, "&[1 2 3]", t)
@@ -79,7 +95,8 @@ func TestArrayPointers(t *testing.T) {
 	checkPtr([]rune{'A', 'B'}, "&AB", t, o)
 }
 
-func TestBasicTypes(t *testing.T) {
+func TestBasicTypes(ot *testing.T) {
+	t := newTester(ot)
 	check(false, "false", t)
 	check(true, "true", t)
 	check(make(chan int), "chan int", t)
@@ -107,7 +124,8 @@ func TestBasicTypes(t *testing.T) {
 	check('A', "A", t, o)
 }
 
-func TestComplex(t *testing.T) {
+func TestComplex(ot *testing.T) {
+	t := newTester(ot)
 	check(1+1i, "1 + 1i", t)
 	check(1.2+4.3i, "1.2 + 4.3i", t)
 	check(1.2345+4.3456i, "1.234 + 4.346i", t)
@@ -124,7 +142,8 @@ func tuple(a, b int, c string) (int, int, string) {
 	return a, b, c
 }
 
-func TestFormat(t *testing.T) {
+func TestFormat(ot *testing.T) {
+	t := newTester(ot)
 	a := [...]int{4, 5, 6}
 	m := map[int]string{12: "hello", 34: "world"}
 
@@ -137,22 +156,15 @@ func TestFormat(t *testing.T) {
 	o.MapSepVal = " - "
 
 	check(a, "<< 4, 5, 6 >>", t, o)
-
-	actual := ats.AnyToStringCustom(m, o)
-	mustStartWith(actual, o.MapStart, t)
-	mustEndWith(actual, o.MapEnd, t)
-	mustContain(actual, "12:hello", t)
-	mustContain(actual, "34:world", t)
-	mustContain(actual, o.MapSepVal, t)
+	check(m, ":: 12:hello - 34:world!", t, o)
 
 	o.ShowType = true
 	check(a, "[]int << 4, 5, 6 >>", t, o)
-
-	actual = ats.AnyToStringCustom(m, o)
-	mustStartWith(actual, "map[int]string ", t)
+	check(m, "map[int]string :: 12:hello - 34:world!", t, o)
 }
 
-func TestFunc(t *testing.T) {
+func TestFunc(ot *testing.T) {
+	t := newTester(ot)
 	check(hello, "hello(int) string", t)
 	checkPtr(hello, "&hello(int) string", t)
 
@@ -162,66 +174,31 @@ func TestFunc(t *testing.T) {
 	actual := ats.AnyToString(func(i int) int {
 		return i + 1
 	})
-	mustContain(actual, "(int) int", t)
+	check(actual, "func1(int) int", t)
 }
 
-func TestInterface(t *testing.T) {
+func TestInterface(ot *testing.T) {
+	t := newTester(ot)
 	var i interface{}
 	check(i, "interface{}", t)
 	checkPtr(i, "&interface{}", t)
 }
 
-func mustContain(actual string, substr string, t *testing.T) {
-	if strings.Contains(actual, substr) {
-		return
-	}
-
-	_, _, line, ok := runtime.Caller(1)
-
-	if ok {
-		t.Errorf("(line %d) %s NOT IN %s", line, substr, actual)
-	} else {
-		t.Errorf("%s NOT IN %s", substr, actual)
-	}
-}
-
-func mustAffix(f func(string, string) bool, actual string, s string, t *testing.T) {
-	if f(actual, s) {
-		return
-	}
-
-	_, _, line, ok := runtime.Caller(2)
-
-	if ok {
-		t.Errorf("(line %d) %s NOT WITH %s", line, actual, s)
-	} else {
-		t.Errorf("%s DOES NOT WITH %s", actual, s)
-	}
-}
-
-func mustStartWith(actual string, s string, t *testing.T) {
-	mustAffix(strings.HasPrefix, actual, s, t)
-}
-
-func mustEndWith(actual string, s string, t *testing.T) {
-	mustAffix(strings.HasSuffix, actual, s, t)
-}
-
-func TestMap(t *testing.T) {
+func TestMap(ot *testing.T) {
+	t := newTester(ot)
 	fa, tr := false, true
 	i := map[int]string{12: "hello", 34: "world"}
 	s := map[string]*bool{"F": &fa, "T": &tr}
 
 	actual := ats.AnyToString(i)
-	mustContain(actual, "12:hello", t)
-	mustContain(actual, "34:world", t)
+	check(actual, "{12:hello 34:world}", t)
 
 	actual = ats.AnyToString(s)
-	mustContain(actual, "F:&false", t)
-	mustContain(actual, "T:&true", t)
+	check(actual, "{F:&false T:&true}", t)
 }
 
-func TestMemory(t *testing.T) {
+func TestMemory(ot *testing.T) {
+	t := newTester(ot)
 	check(uintptr(0x12345678), "0x12345678", t)
 	checkPtr(uintptr(0x12345678), "&0x12345678", t)
 
@@ -229,7 +206,8 @@ func TestMemory(t *testing.T) {
 	checkPtr(unsafe.Pointer(uintptr(0x34125678)), "&Ux34125678", t)
 }
 
-func TestPointers(t *testing.T) {
+func TestPointers(ot *testing.T) {
+	t := newTester(ot)
 	checkPtr(false, "&false", t)
 	checkPtr(true, "&true", t)
 	checkPtr(make(chan int), "&chan int", t)
@@ -284,7 +262,8 @@ type SliceExample struct {
 	ints  []int
 }
 
-func TestStruct(t *testing.T) {
+func TestStruct(ot *testing.T) {
+	t := newTester(ot)
 	a := Example{12, "hello", '*'}
 	b := NestedExample{Example{34, "world", '%'}, "super", 'X'}
 	c := SliceExample{[]byte("hello world"), []int{1, 2, 3}}
@@ -303,6 +282,19 @@ func TestStruct(t *testing.T) {
 	checkPtr(b, "&{{34 world %} super X}", t, o)
 	checkPtr(c, "&{hello world [1 2 3]}", t, o)
 	checkPtr(d, "A -> b -> C", t, o)
+
+	o.IgnoreCustomMethod = true
+	o.ShowFieldNames = true
+
+	check(a, "{a:12 B:hello c:*}", t, o)
+	check(b, "{Example:{a:34 B:world c:%} b:super C:X}", t, o)
+	check(c, "{bytes:hello world ints:[1 2 3]}", t, o)
+	check(d, "{a:A b:b c:C}", t, o)
+
+	checkPtr(a, "&{a:12 B:hello c:*}", t, o)
+	checkPtr(b, "&{Example:{a:34 B:world c:%} b:super C:X}", t, o)
+	checkPtr(c, "&{bytes:hello world ints:[1 2 3]}", t, o)
+	checkPtr(d, "&{a:A b:b c:C}", t, o)
 }
 
 func readFile(path string) string {
@@ -322,7 +314,8 @@ func readFile(path string) string {
 	return strings.ReplaceAll(res, "\r", "")
 }
 
-func Test2D(t *testing.T) {
+func Test2D(ot *testing.T) {
+	t := newTester(ot)
 	data := [][]int32{
 		{1, 2, 3},
 		{4, -5, 6},
@@ -332,7 +325,8 @@ func Test2D(t *testing.T) {
 	check(data, exp, t)
 }
 
-func Test3D(t *testing.T) {
+func Test3D(ot *testing.T) {
+	t := newTester(ot)
 	data := [][][]int32{
 		{
 			{-1, -2, -3},
@@ -353,7 +347,8 @@ func Test3D(t *testing.T) {
 	check(data, exp, t)
 }
 
-func Test4D(t *testing.T) {
+func Test4D(ot *testing.T) {
+	t := newTester(ot)
 	data := [][][][]int32{
 		{
 			{

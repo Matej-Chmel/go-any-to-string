@@ -32,7 +32,8 @@ func formatCompositeType(val *r.Value) string {
 	stack.Push(newTypeInfo(val.Type(), false))
 
 	for stack.HasItems() {
-		top, _ := stack.Pop()
+		top := stack.TopPointer()
+		stack.Pop()
 		aType := top.aType
 
 		if top.endMap {

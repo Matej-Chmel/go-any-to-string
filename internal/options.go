@@ -28,6 +28,13 @@ type Options struct {
 	FuncSepInOut string
 	// Symbol at the start of a function's parameter list, default "("
 	FuncStart string
+	// Function for getting the sort order of keys of a map.
+	// It returns a function of type KeyLessType.
+	// Passing nil will leave keys unsorted.
+	GetLessFunc GetLessType
+	// Flag indicating whether to ignore custom String() string method
+	// if the data type supports it
+	IgnoreCustomMethod bool
 	// Symbol at the start of a map, default "}"
 	MapEnd string
 	// Symbol between key and value of a map, default ":"
@@ -39,13 +46,17 @@ type Options struct {
 	// Flag indicating whether a rune array or slice should be written
 	// as a string, default false
 	RuneAsString bool
+	// Flag indicating whether to write a name of each field of a struct
+	ShowFieldNames bool
 	// Flag indicating whether to write a type name before the final string,
 	// default false
 	ShowType bool
 	// Symbol at the end of a struct, default "}"
 	StructEnd string
-	// Symbol between two fields of a struct, default " "
-	StructSep string
+	// Default symbol between a field name and a field value of a struct
+	StructSepFieldName string
+	// Symbol between two field values of a struct, default " "
+	StructSepFieldValue string
 	// Symbol at the start of a struct, default "{"
 	StructStart string
 }
@@ -71,10 +82,13 @@ const (
 	DefaultFuncEnd string = ")"
 	// Default symbol between two parameters of a function
 	DefaultFuncSep string = ", "
-	// Default symbol between input and output parameter lists of a function
+	// Default symbol between input and output parameter lists of a freflect
 	DefaultFuncSepInOut string = " "
 	// Default symbol at the start of a function's parameter list
 	DefaultFuncStart string = "("
+	// Default flag indicating whether to ignore custom String() string method
+	// if the data type supports it
+	DefaultIgnoreCustomMethod bool = false
 	// Default symbol at the end of a map
 	DefaultMapEnd string = "}"
 	// Default symbol between key and value of a map
@@ -85,12 +99,16 @@ const (
 	DefaultMapStart string = "{"
 	// Default flag indicating whether a rune array or slice should be written as a string
 	DefaultRuneAsString bool = false
+	// Default flag indicating whether to write a name of each field of a struct
+	DefaultShowFieldNames bool = false
 	// Default flag indicating whether to write a type name before the final string
 	DefaultShowType bool = false
 	// Default symbol at the end of a struct
 	DefaultStructEnd string = "}"
-	// Default symbol between two fields of a struct
-	DefaultStructSep string = " "
+	// Default symbol between a field name and a field value of a struct
+	DefaultStructSepFieldName string = ":"
+	// Default symbol between two field values of a struct
+	DefaultStructSepFieldValue string = " "
 	// Default symbol at the start of a struct
 	DefaultStructStart string = "{"
 )
@@ -98,26 +116,30 @@ const (
 // Constructs new Options with default values
 func NewOptions() *Options {
 	return &Options{
-		ArrayEnd:           DefaultArrayEnd,
-		ArrayIndent:        DefaultArrayIndent,
-		ArraySep:           DefaultArraySep,
-		ArraySep2D:         DefaultArraySep2D,
-		ArraySep3D:         DefaultArraySep3D,
-		ArrayStart:         DefaultArrayStart,
-		ByteAsString:       DefaultByteAsString,
-		FloatDecimalPlaces: DefaultFloatDecimalPlaces,
-		FuncEnd:            DefaultFuncEnd,
-		FuncSep:            DefaultFuncSep,
-		FuncSepInOut:       DefaultFuncSepInOut,
-		FuncStart:          DefaultFuncStart,
-		MapEnd:             DefaultMapEnd,
-		MapSepKey:          DefaultMapSepKey,
-		MapSepVal:          DefaultMapSepVal,
-		MapStart:           DefaultMapStart,
-		RuneAsString:       DefaultRuneAsString,
-		ShowType:           DefaultShowType,
-		StructEnd:          DefaultStructEnd,
-		StructSep:          DefaultStructSep,
-		StructStart:        DefaultStructStart,
+		ArrayEnd:            DefaultArrayEnd,
+		ArrayIndent:         DefaultArrayIndent,
+		ArraySep:            DefaultArraySep,
+		ArraySep2D:          DefaultArraySep2D,
+		ArraySep3D:          DefaultArraySep3D,
+		ArrayStart:          DefaultArrayStart,
+		ByteAsString:        DefaultByteAsString,
+		FloatDecimalPlaces:  DefaultFloatDecimalPlaces,
+		FuncEnd:             DefaultFuncEnd,
+		FuncSep:             DefaultFuncSep,
+		FuncSepInOut:        DefaultFuncSepInOut,
+		FuncStart:           DefaultFuncStart,
+		GetLessFunc:         DefaultGetLess,
+		IgnoreCustomMethod:  DefaultIgnoreCustomMethod,
+		MapEnd:              DefaultMapEnd,
+		MapSepKey:           DefaultMapSepKey,
+		MapSepVal:           DefaultMapSepVal,
+		MapStart:            DefaultMapStart,
+		RuneAsString:        DefaultRuneAsString,
+		ShowFieldNames:      DefaultShowFieldNames,
+		ShowType:            DefaultShowType,
+		StructEnd:           DefaultStructEnd,
+		StructSepFieldName:  DefaultStructSepFieldName,
+		StructSepFieldValue: DefaultStructSepFieldValue,
+		StructStart:         DefaultStructStart,
 	}
 }

@@ -8,7 +8,7 @@ import (
 	gs "github.com/Matej-Chmel/go-generic-stack"
 )
 
-// Processes given stack and writes each item to builder.
+// Converts given stack and writes each item to builder.
 // In the end, writes all contents from builder to writer.
 type CompositeConverter struct {
 	builder strings.Builder
@@ -27,30 +27,9 @@ func NewCompositeConverter(o *Options, val *r.Value) CompositeConverter {
 	return c
 }
 
-// Run the whole conversion from start to finish
-func (c *CompositeConverter) ConvertStackToString() string {
-	if c.stack.Empty() {
-		return ""
-	}
-
-	firstItem, _ := c.stack.Top()
-
-	if c.options.ShowType {
-		c.write(formatCompositeType(firstItem.val))
-		c.writeRune(' ')
-	}
-
-	for c.stack.HasItems() {
-		top, _ := c.stack.Top()
-		c.processItem(top)
-	}
-
-	return c.builder.String()
-}
-
-// Processes arrays and slices. Items with 2 or 3 dimensions
-// are delegated to method processArray2D3D.
-func (c *CompositeConverter) processArray(it *Item) {
+// Converts arrays and slices. Items with 2 or 3 dimensions
+// are delegated to method convertArray2D3D.
+func (c *CompositeConverter) convertArray(it *Item) {
 	var currentDim uint32
 
 	if it.dim == 0 {
@@ -64,7 +43,7 @@ func (c *CompositeConverter) processArray(it *Item) {
 
 	// Delegate work for 2D and 3D
 	if currentDim >= 2 && currentDim <= 3 {
-		c.processArray2D3D(it, currentDim)
+		c.convertArray2D3D(it, currentDim)
 		return
 	}
 
@@ -131,8 +110,8 @@ func (c *CompositeConverter) processArray(it *Item) {
 	}
 }
 
-// Processes a 2D and 3D arrays or slices
-func (c *CompositeConverter) processArray2D3D(it *Item, currentDim uint32) {
+// Converts a 2D and 3D arrays or slices
+func (c *CompositeConverter) convertArray2D3D(it *Item, currentDim uint32) {
 	if l := it.val.Len(); it.ix > 0 && it.ix < l {
 		// Items other than first one
 
@@ -151,8 +130,8 @@ func (c *CompositeConverter) processArray2D3D(it *Item, currentDim uint32) {
 	c.pushArrayItem(it, currentDim)
 }
 
-// Process an array or slice of bytes as a string
-func (c *CompositeConverter) processBytes(it *Item) {
+// Converts an array or slice of bytes as a string
+func (c *CompositeConverter) convertBytes(it *Item) {
 	l := it.val.Len()
 
 	if it.ix == l {
@@ -167,14 +146,14 @@ func (c *CompositeConverter) processBytes(it *Item) {
 	it.ix++
 }
 
-// Process composite types.
-// Returns true if Item it is of composite type and was processed
-func (c *CompositeConverter) processComposites(it *Item, kind r.Kind) bool {
+// Converts composite types.
+// Returns true if Item is of composite type and was converted
+func (c *CompositeConverter) convertComposites(it *Item, kind r.Kind) bool {
 	switch kind {
 	case r.Array, r.Slice:
 		if it.flag == Bytes || it.flag == Runes {
 			// Item already flagged as string
-			c.processBytes(it)
+			c.convertBytes(it)
 			return true
 		}
 
@@ -184,28 +163,28 @@ func (c *CompositeConverter) processComposites(it *Item, kind r.Kind) bool {
 			elemKind := it.val.Type().Elem().Kind()
 
 			if c.options.ByteAsString && elemKind == r.Uint8 {
-				// Array of bytes that should be processed as a string
+				// Array of bytes that should be converted as a string
 				it.flag = Bytes
-				c.processBytes(it)
+				c.convertBytes(it)
 				return true
 			}
 
 			if c.options.RuneAsString && elemKind == r.Int32 {
-				// Array of runes that should be processed as a string
+				// Array of runes that should be converted as a string
 				it.flag = Runes
-				c.processBytes(it)
+				c.convertBytes(it)
 				return true
 			}
 		}
 
-		// Process as standard array
-		c.processArray(it)
+		// Convert Item as standard array
+		c.convertArray(it)
 	case r.Map:
-		c.processMap(it)
+		c.convertMap(it)
 	case r.Pointer:
-		c.processPointer(it)
+		c.convertPointer(it)
 	case r.Struct:
-		c.processStruct(it)
+		c.convertStruct(it)
 	default:
 		return false
 	}
@@ -215,12 +194,17 @@ func (c *CompositeConverter) processComposites(it *Item, kind r.Kind) bool {
 
 // Attempts to write custom string representation of a struct
 // by finding and calling its String() string method
-func (c *CompositeConverter) processCustomMethod(it *Item) bool {
+func (c *CompositeConverter) convertCustomMethod(it *Item) bool {
+	if c.options.IgnoreCustomMethod {
+		return false
+	}
+
 	if method := it.val.MethodByName("String"); method.IsValid() {
 		res := method.Call(nil)
 
 		if len(res) == 1 && res[0].Kind() == r.String {
 			c.write(res[0].String())
+			c.stack.Pop()
 			return true
 		}
 	}
@@ -230,7 +214,7 @@ func (c *CompositeConverter) processCustomMethod(it *Item) bool {
 
 // If Item it is a part of a byte or rune array, its value is written
 // as character and true is returned.
-func (c *CompositeConverter) processFlaggedBytes(it *Item) bool {
+func (c *CompositeConverter) convertFlaggedBytes(it *Item) bool {
 	if it.flag == Bytes {
 		c.write(c.formatByte(it.val))
 	} else if it.flag == Runes {
@@ -244,10 +228,15 @@ func (c *CompositeConverter) processFlaggedBytes(it *Item) bool {
 
 // Determines kind of Item it and writes its value into
 // a builder. Item may be popped from the stack if fully processed.
-func (c *CompositeConverter) processItem(it *Item) {
+func (c *CompositeConverter) convertItem(it *Item) {
+	// Attempt to use custom String() string method
+	if c.convertCustomMethod(it) {
+		return
+	}
+
 	kind := it.val.Kind()
 
-	if processed := c.processComposites(it, kind); processed {
+	if c.convertComposites(it, kind) {
 		return
 	}
 
@@ -255,19 +244,24 @@ func (c *CompositeConverter) processItem(it *Item) {
 	// pop the item from the stack
 	c.stack.Pop()
 
-	if processed := c.processFlaggedBytes(it); processed {
+	if c.convertFlaggedBytes(it) {
 		return
 	}
 
 	c.write(c.ConvertToString(it.val))
 }
 
-// Processes a map
-func (c *CompositeConverter) processMap(it *Item) {
+// Converts a map
+func (c *CompositeConverter) convertMap(it *Item) {
 	if it.flag == None && it.ix == 0 {
 		// First stage, save keys so that order doesn't change
 		it.flag = KeyNext
 		it.keys = it.val.MapKeys()
+
+		if c.options.GetLessFunc != nil {
+			SortKeys(it.keys, c.options.GetLessFunc)
+		}
+
 		c.write(c.options.MapStart)
 	} else if it.flag == KeyNext && it.ix < it.val.Len() {
 		// Write separator between two key-value pairs
@@ -280,14 +274,14 @@ func (c *CompositeConverter) processMap(it *Item) {
 	}
 
 	if key := it.keys[it.ix]; it.flag == KeyNext {
-		// Process a key next
+		// Convert a key next
 		c.push(None, 0, &key)
 		it.flag = ValueNext
 	} else if it.flag == ValueNext {
 		// Write separator between key and value
 		c.write(c.options.MapSepKey)
 
-		// Find and process a value next
+		// Find and convert a value next
 		val := it.val.MapIndex(key)
 		c.push(None, 0, &val)
 		it.flag = KeyNext
@@ -297,18 +291,17 @@ func (c *CompositeConverter) processMap(it *Item) {
 	}
 }
 
-// Processes a pointer
-func (c *CompositeConverter) processPointer(it *Item) {
+// Converts a pointer
+func (c *CompositeConverter) convertPointer(it *Item) {
 	elem := it.val.Elem()
 
 	if elem.Kind() == r.Struct {
 		// Pointer points to a struct,
-		// method processStruct doesn't need to create the pointer.
+		// method convertStruct doesn't need to create the pointer.
 		it.flag = StructData
 
 		// If the struct has custom String() string, use it
-		if c.processCustomMethod(it) {
-			c.stack.Pop()
+		if c.convertCustomMethod(it) {
 			return
 		}
 	}
@@ -317,8 +310,28 @@ func (c *CompositeConverter) processPointer(it *Item) {
 	it.val = &elem
 }
 
-// Processes a struct
-func (c *CompositeConverter) processStruct(it *Item) {
+// Run the whole conversion from start to finish
+func (c *CompositeConverter) ConvertStackToString() string {
+	if c.stack.Empty() {
+		return ""
+	}
+
+	firstItem := c.stack.Top()
+
+	if c.options.ShowType {
+		c.write(formatCompositeType(firstItem.val))
+		c.writeRune(' ')
+	}
+
+	for c.stack.HasItems() {
+		c.convertItem(c.stack.Top())
+	}
+
+	return c.builder.String()
+}
+
+// Converts a struct
+func (c *CompositeConverter) convertStruct(it *Item) {
 	if it.flag != StructData {
 		// First stage, create pointer to the struct
 		// so that unexported fields can be addressed
@@ -327,23 +340,26 @@ func (c *CompositeConverter) processStruct(it *Item) {
 		elem := tmp.Elem()
 		it.flag = StructData
 		it.val = &elem
-
-		// If the struct has custom String() string, use it
-		if c.processCustomMethod(it) {
-			c.stack.Pop()
-			return
-		}
 	}
 
 	if it.ix == 0 {
+		if c.options.ShowFieldNames {
+			it.typ = it.val.Type()
+		}
+
 		c.write(c.options.StructStart)
 	} else if it.ix < it.val.NumField() {
-		c.write(c.options.StructSep)
+		c.write(c.options.StructSepFieldValue)
 	} else if it.ix == it.val.NumField() {
 		// End of struct, pop item from the stack
 		c.write(c.options.StructEnd)
 		c.stack.Pop()
 		return
+	}
+
+	if c.options.ShowFieldNames {
+		c.write(it.typ.Field(it.ix).Name)
+		c.write(c.options.StructSepFieldName)
 	}
 
 	if field := it.val.Field(it.ix); field.CanInterface() {
