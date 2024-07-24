@@ -12,7 +12,34 @@ import (
 	ats "github.com/Matej-Chmel/go-any-to-string"
 )
 
-// Wrapper around the original test type
+type Example struct {
+	a int
+	B string
+	c rune
+}
+
+type ExampleCustom struct {
+	a rune
+	b rune
+	c rune
+}
+
+func (e ExampleCustom) String() string {
+	return fmt.Sprintf("%c -> %c -> %c", e.a, e.b, e.c)
+}
+
+type NestedExample struct {
+	Example
+	b string
+	C rune
+}
+
+type SliceExample struct {
+	bytes []byte
+	ints  []int
+}
+
+// Wrapper around the test state
 type tester struct {
 	failed bool
 	*testing.T
@@ -61,6 +88,102 @@ func checkPtr[T any](data T, expected string, t *tester, o ...*ats.Options) {
 	checkImpl(2, &data, expected, t, o...)
 }
 
+func hello(a int) string {
+	return fmt.Sprintf("%d", a)
+}
+
+func readFile(path string) string {
+	file, err := os.Open(path)
+
+	if err != nil {
+		return ""
+	}
+
+	data, err := io.ReadAll(file)
+
+	if err != nil {
+		return ""
+	}
+
+	res := strings.TrimSpace(string(data))
+	return strings.ReplaceAll(res, "\r", "")
+}
+
+func tuple(a, b int, c string) (int, int, string) {
+	return a, b, c
+}
+
+func Test2D(ot *testing.T) {
+	t := newTester(ot)
+	data := [][]int32{
+		{1, 2, 3},
+		{4, -5, 6},
+		{7, 8, -9, 0, 1},
+	}
+	exp := readFile("test_data/2D.txt")
+	check(data, exp, t)
+}
+
+func Test3D(ot *testing.T) {
+	t := newTester(ot)
+	data := [][][]int32{
+		{
+			{-1, -2, -3},
+			{4, 5, 6},
+			{7, 8, 9},
+		},
+		{
+			{0, 0, 6},
+			{0, 0},
+		},
+		{
+			{1, 1, -1, -1, 0},
+			{0},
+			{1, 1},
+		},
+	}
+	exp := readFile("test_data/3D.txt")
+	check(data, exp, t)
+}
+
+func Test4D(ot *testing.T) {
+	t := newTester(ot)
+	data := [][][][]int32{
+		{
+			{
+				{1, 2, 3},
+				{4, 5, 6},
+				{7, 8, 9},
+			},
+			{
+				{-4, -5, -6},
+				{-7, -8, -9},
+				{-1, -2, -3},
+			},
+		},
+		{
+			{
+				{0, 0},
+				{0, 0},
+				{0},
+			},
+			{
+				{100, 10},
+				{1000, 10},
+				{100_000_000},
+			},
+		},
+		{
+			{
+				{-1, 1},
+				{1, -1},
+			},
+		},
+	}
+	exp := readFile("test_data/4D.txt")
+	check(data, exp, t)
+}
+
 func TestArrays(ot *testing.T) {
 	t := newTester(ot)
 	check([...]bool{false, true}, "[false true]", t)
@@ -70,16 +193,6 @@ func TestArrays(ot *testing.T) {
 	check([]rune{'A', 'B'}, "[65 66]", t)
 	check([]string{"hello", "world"}, "[hello world]", t)
 
-	o := ats.NewOptions()
-	o.ByteAsString = true
-	o.RuneAsString = true
-
-	check([]byte{67, 68}, "CD", t, o)
-	check([]rune{'A', 'B'}, "AB", t, o)
-}
-
-func TestArrayPointers(ot *testing.T) {
-	t := newTester(ot)
 	checkPtr([...]bool{false, true}, "&[false true]", t)
 	checkPtr([...]byte{12, 34}, "&[12 34]", t)
 	checkPtr([...]int{1, 2, 3}, "&[1 2 3]", t)
@@ -91,13 +204,15 @@ func TestArrayPointers(ot *testing.T) {
 	o.ByteAsString = true
 	o.RuneAsString = true
 
+	check([]byte{67, 68}, "CD", t, o)
+	check([]rune{'A', 'B'}, "AB", t, o)
+
 	checkPtr([]byte{67, 68}, "&CD", t, o)
 	checkPtr([]rune{'A', 'B'}, "&AB", t, o)
 }
 
 func TestBasicTypes(ot *testing.T) {
 	t := newTester(ot)
-	check(false, "false", t)
 	check(true, "true", t)
 	check(make(chan int), "chan int", t)
 	check(float32(12.34), "12.34", t)
@@ -132,14 +247,6 @@ func TestComplex(ot *testing.T) {
 	checkPtr(1+1i, "&1 + 1i", t)
 	checkPtr(1.2+4.3i, "&1.2 + 4.3i", t)
 	checkPtr(1.2345+4.3456i, "&1.234 + 4.346i", t)
-}
-
-func hello(a int) string {
-	return fmt.Sprintf("%d", a)
-}
-
-func tuple(a, b int, c string) (int, int, string) {
-	return a, b, c
 }
 
 func TestFormat(ot *testing.T) {
@@ -235,33 +342,6 @@ func TestPointers(ot *testing.T) {
 	checkPtr('A', "&A", t, o)
 }
 
-type Example struct {
-	a int
-	B string
-	c rune
-}
-
-type ExampleCustom struct {
-	a rune
-	b rune
-	c rune
-}
-
-func (e ExampleCustom) String() string {
-	return fmt.Sprintf("%c -> %c -> %c", e.a, e.b, e.c)
-}
-
-type NestedExample struct {
-	Example
-	b string
-	C rune
-}
-
-type SliceExample struct {
-	bytes []byte
-	ints  []int
-}
-
 func TestStruct(ot *testing.T) {
 	t := newTester(ot)
 	a := Example{12, "hello", '*'}
@@ -297,90 +377,24 @@ func TestStruct(ot *testing.T) {
 	checkPtr(d, "&{a:A b:b c:C}", t, o)
 }
 
-func readFile(path string) string {
-	file, err := os.Open(path)
-
-	if err != nil {
-		return ""
-	}
-
-	data, err := io.ReadAll(file)
-
-	if err != nil {
-		return ""
-	}
-
-	res := strings.TrimSpace(string(data))
-	return strings.ReplaceAll(res, "\r", "")
-}
-
-func Test2D(ot *testing.T) {
+func TestZero(ot *testing.T) {
 	t := newTester(ot)
-	data := [][]int32{
-		{1, 2, 3},
-		{4, -5, 6},
-		{7, 8, -9, 0, 1},
-	}
-	exp := readFile("test_data/2D.txt")
-	check(data, exp, t)
-}
-
-func Test3D(ot *testing.T) {
-	t := newTester(ot)
-	data := [][][]int32{
-		{
-			{-1, -2, -3},
-			{4, 5, 6},
-			{7, 8, 9},
-		},
-		{
-			{0, 0, 6},
-			{0, 0},
-		},
-		{
-			{1, 1, -1, -1, 0},
-			{0},
-			{1, 1},
-		},
-	}
-	exp := readFile("test_data/3D.txt")
-	check(data, exp, t)
-}
-
-func Test4D(ot *testing.T) {
-	t := newTester(ot)
-	data := [][][][]int32{
-		{
-			{
-				{1, 2, 3},
-				{4, 5, 6},
-				{7, 8, 9},
-			},
-			{
-				{-4, -5, -6},
-				{-7, -8, -9},
-				{-1, -2, -3},
-			},
-		},
-		{
-			{
-				{0, 0},
-				{0, 0},
-				{0},
-			},
-			{
-				{100, 10},
-				{1000, 10},
-				{100_000_000},
-			},
-		},
-		{
-			{
-				{-1, 1},
-				{1, -1},
-			},
-		},
-	}
-	exp := readFile("test_data/4D.txt")
-	check(data, exp, t)
+	check[interface{}](nil, "nil", t)
+	check[*int](nil, "nil", t)
+	check(false, "false", t)
+	check(float32(0.0), "0.0", t)
+	check(0.0, "0.0", t)
+	check(uint(0), "0", t)
+	check(uint8(0), "0", t)
+	check(uint16(0), "0", t)
+	check(uint32(0), "0", t)
+	check(uint64(0), "0", t)
+	check(int(0), "0", t)
+	check(int8(0), "0", t)
+	check(int16(0), "0", t)
+	check(int32(0), "0", t)
+	check(int64(0), "0", t)
+	check("", "", t)
+	check(byte(0), "0", t)
+	check('\000', "0", t)
 }

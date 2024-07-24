@@ -25,7 +25,14 @@ func countDimensions(val *r.Value) (d uint32) {
 	return
 }
 
-// Returns the name of the type of the value val
+// Returns the name of the type of the Value that represents
+// a variable of a basic type
+func FormatBasicType(val *r.Value) string {
+	return val.Type().String()
+}
+
+// Returns the name of the type of the Value that represents
+// a variable of a composite type
 func formatCompositeType(val *r.Value) string {
 	var builder strings.Builder
 	stack := gs.Stack[typeInfo]{}
@@ -58,11 +65,32 @@ func formatCompositeType(val *r.Value) string {
 	return builder.String()
 }
 
-// Returns true if given Kind represents a composite type
+// Returns the name of the type of the given Value
+func FormatType(val *r.Value) string {
+	if IsCompositeType(val) {
+		return formatCompositeType(val)
+	}
+
+	return FormatBasicType(val)
+}
+
+// Returns true if given Value represents a composite type
 func IsCompositeType(val *r.Value) bool {
 	switch val.Kind() {
 	case r.Array, r.Map, r.Pointer, r.Slice, r.Struct:
 		return true
+	}
+
+	return false
+}
+
+// Returns true if given Value represents a nil pointer
+func IsNil(val *r.Value) bool {
+	switch val.Kind() {
+	case r.Chan, r.Func, r.Map, r.Pointer, r.Slice:
+		return val.IsNil()
+	case r.Interface, r.Invalid:
+		return !val.IsValid() || val.IsZero() || val.IsNil()
 	}
 
 	return false

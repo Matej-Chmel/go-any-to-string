@@ -35,19 +35,26 @@ func ValueToString(val *reflect.Value) string {
 }
 
 // Convert Value to string according to specified Options
-func ValueToStringCustom(val *reflect.Value, o *Options) string {
-	if ite.IsCompositeType(val) {
+func ValueToStringCustom(val *reflect.Value, o *Options) (res string) {
+	if ite.IsNil(val) {
+		res = "nil"
+
+		if o.ShowType {
+			res = res + " " + ite.FormatType(val)
+		}
+	} else if ite.IsCompositeType(val) {
 		c := ite.NewCompositeConverter(o, val)
 		return c.ConvertStackToString()
+	} else {
+		c := ite.NewLeafConverter(o)
+		res = c.ConvertToString(val)
+
+		if o.ShowType {
+			res = res + " " + ite.FormatBasicType(val)
+		}
 	}
 
-	c := ite.NewLeafConverter(o)
-
-	if o.ShowType {
-		return c.FormatBuiltInType(val) + " " + c.ConvertToString(val)
-	}
-
-	return c.ConvertToString(val)
+	return
 }
 
 // Write a Value to a Writer
@@ -57,18 +64,7 @@ func ValueToWriter(val *reflect.Value, w io.Writer) error {
 
 // Write a Value to a Writer according to specified Options
 func ValueToWriterCustom(val *reflect.Value, o *Options, w io.Writer) error {
-	if ite.IsCompositeType(val) {
-		c := ite.NewCompositeConverter(o, val)
-		return write(c.ConvertStackToString(), w)
-	}
-
-	c := ite.NewLeafConverter(o)
-
-	if o.ShowType {
-		return write(c.FormatBuiltInType(val)+" "+c.ConvertToString(val), w)
-	}
-
-	return write(c.ConvertToString(val), w)
+	return write(ValueToStringCustom(val, o), w)
 }
 
 // Internal function that writes a string to a Writer

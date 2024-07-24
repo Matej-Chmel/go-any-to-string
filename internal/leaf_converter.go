@@ -75,11 +75,6 @@ func (c *LeafConverter) formatBool(val *r.Value) string {
 	return strconv.FormatBool(val.Bool())
 }
 
-// Formats a name of the type of the value val
-func (c *LeafConverter) FormatBuiltInType(val *r.Value) string {
-	return val.Type().String()
-}
-
 // Formats a byte
 func (c *LeafConverter) formatByte(val *r.Value) string {
 	return string(byte(val.Uint()))
