@@ -149,6 +149,12 @@ func (c *CompositeConverter) convertBytes(it *Item) {
 // Converts composite types.
 // Returns true if Item is of composite type and was converted
 func (c *CompositeConverter) convertComposites(it *Item, kind r.Kind) bool {
+	if IsNil(it.val) {
+		c.write("nil")
+		c.stack.Pop()
+		return true
+	}
+
 	switch kind {
 	case r.Array, r.Slice:
 		if it.flag == Bytes || it.flag == Runes {

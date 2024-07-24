@@ -46,7 +46,7 @@ func (c *LeafConverter) ConvertToString(val *r.Value) string {
 	case r.Int, r.Int8, r.Int16, r.Int64:
 		return c.formatInt(val)
 	case r.Interface, r.Invalid:
-		return c.formatInterface()
+		return c.formatInterface(val)
 	case r.Uint, r.Uint16, r.Uint32, r.Uint64:
 		return c.formatUint(val)
 
@@ -88,14 +88,17 @@ func (c *LeafConverter) formatChannel(val *r.Value) string {
 // Formats a complex number
 func (c *LeafConverter) formatComplex(bitSize int, val *r.Value) string {
 	complex := val.Complex()
-	realPart := floatToString(bitSize, c.options.FloatDecimalPlaces, real(complex))
-	imagPart := floatToString(bitSize, c.options.FloatDecimalPlaces, imag(complex))
-	return fmt.Sprintf("%s + %si", realPart, imagPart)
+	realPart := floatToString(
+		false, bitSize, c.options.FloatDecimalPlaces, real(complex))
+	imagPart := floatToString(
+		false, bitSize, c.options.FloatDecimalPlaces, imag(complex))
+	return fmt.Sprintf("(%s+%si)", realPart, imagPart)
 }
 
 // Formats a floating-point number
 func (c *LeafConverter) formatFloat(val *r.Value, bitSize int) string {
-	return floatToString(bitSize, c.options.FloatDecimalPlaces, val.Float())
+	return floatToString(
+		true, bitSize, c.options.FloatDecimalPlaces, val.Float())
 }
 
 // Formats a function signature
@@ -155,8 +158,12 @@ func (c *LeafConverter) formatInt(val *r.Value) string {
 	return strconv.FormatInt(val.Int(), 10)
 }
 
-// Formats an empty interface{}
-func (c *LeafConverter) formatInterface() string {
+// Formats an interface
+func (c *LeafConverter) formatInterface(val *r.Value) string {
+	if !val.IsValid() || val.IsZero() || val.IsNil() {
+		return "nil"
+	}
+
 	return "interface{}"
 }
 

@@ -35,26 +35,20 @@ func ValueToString(val *reflect.Value) string {
 }
 
 // Convert Value to string according to specified Options
-func ValueToStringCustom(val *reflect.Value, o *Options) (res string) {
-	if ite.IsNil(val) {
-		res = "nil"
-
-		if o.ShowType {
-			res = res + " " + ite.FormatType(val)
-		}
-	} else if ite.IsCompositeType(val) {
+func ValueToStringCustom(val *reflect.Value, o *Options) string {
+	if ite.IsCompositeType(val) {
 		c := ite.NewCompositeConverter(o, val)
 		return c.ConvertStackToString()
-	} else {
-		c := ite.NewLeafConverter(o)
-		res = c.ConvertToString(val)
-
-		if o.ShowType {
-			res = res + " " + ite.FormatBasicType(val)
-		}
 	}
 
-	return
+	c := ite.NewLeafConverter(o)
+	res := c.ConvertToString(val)
+
+	if o.ShowType {
+		return res + " " + ite.FormatBasicType(val)
+	}
+
+	return res
 }
 
 // Write a Value to a Writer

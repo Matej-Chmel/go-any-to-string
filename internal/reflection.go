@@ -90,7 +90,7 @@ func IsNil(val *r.Value) bool {
 	case r.Chan, r.Func, r.Map, r.Pointer, r.Slice:
 		return val.IsNil()
 	case r.Interface, r.Invalid:
-		return !val.IsValid() || val.IsZero() || val.IsNil()
+		return !val.IsValid() || val.IsZero()
 	}
 
 	return false

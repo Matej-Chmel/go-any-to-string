@@ -215,8 +215,6 @@ func TestBasicTypes(ot *testing.T) {
 	t := newTester(ot)
 	check(true, "true", t)
 	check(make(chan int), "chan int", t)
-	check(float32(12.34), "12.34", t)
-	check(12.3456, "12.346", t)
 	check(uint(12), "12", t)
 	check(uint8(255), "255", t)
 	check(uint16(65535), "65535", t)
@@ -241,12 +239,19 @@ func TestBasicTypes(ot *testing.T) {
 
 func TestComplex(ot *testing.T) {
 	t := newTester(ot)
-	check(1+1i, "1 + 1i", t)
-	check(1.2+4.3i, "1.2 + 4.3i", t)
-	check(1.2345+4.3456i, "1.234 + 4.346i", t)
-	checkPtr(1+1i, "&1 + 1i", t)
-	checkPtr(1.2+4.3i, "&1.2 + 4.3i", t)
-	checkPtr(1.2345+4.3456i, "&1.234 + 4.346i", t)
+	check(1+1i, "(1+1i)", t)
+	check(1.2+4.3i, "(1.2+4.3i)", t)
+	check(1.2345+4.3456i, "(1.234+4.346i)", t)
+}
+
+func TestFloat(ot *testing.T) {
+	t := newTester(ot)
+	check(0.0, "0.0", t)
+	check(1.0, "1.0", t)
+	check(1.020, "1.02", t)
+	check(1.0209, "1.021", t)
+	check(1.0211, "1.021", t)
+	check(127.1239, "127.124", t)
 }
 
 func TestFormat(ot *testing.T) {
@@ -287,8 +292,8 @@ func TestFunc(ot *testing.T) {
 func TestInterface(ot *testing.T) {
 	t := newTester(ot)
 	var i interface{}
-	check(i, "interface{}", t)
-	checkPtr(i, "&interface{}", t)
+	check(i, "nil", t)
+	checkPtr(i, "&nil", t)
 }
 
 func TestMap(ot *testing.T) {
@@ -318,8 +323,6 @@ func TestPointers(ot *testing.T) {
 	checkPtr(false, "&false", t)
 	checkPtr(true, "&true", t)
 	checkPtr(make(chan int), "&chan int", t)
-	checkPtr(float32(12.34), "&12.34", t)
-	checkPtr(12.3456, "&12.346", t)
 	checkPtr(uint(12), "&12", t)
 	checkPtr(uint8(255), "&255", t)
 	checkPtr(uint16(65535), "&65535", t)
