@@ -149,12 +149,6 @@ func (c *CompositeConverter) convertBytes(it *Item) {
 // Converts composite types.
 // Returns true if Item is of composite type and was converted
 func (c *CompositeConverter) convertComposites(it *Item, kind r.Kind) bool {
-	if IsNil(it.val) {
-		c.write("nil")
-		c.stack.Pop()
-		return true
-	}
-
 	switch kind {
 	case r.Array, r.Slice:
 		if it.flag == Bytes || it.flag == Runes {
@@ -235,6 +229,11 @@ func (c *CompositeConverter) convertFlaggedBytes(it *Item) bool {
 // Determines kind of Item it and writes its value into
 // a builder. Item may be popped from the stack if fully processed.
 func (c *CompositeConverter) convertItem(it *Item) {
+	// Attempt to convert a nil pointer
+	if c.convertNil(it.val) {
+		return
+	}
+
 	// Attempt to use custom String() string method
 	if c.convertCustomMethod(it) {
 		return
@@ -297,6 +296,17 @@ func (c *CompositeConverter) convertMap(it *Item) {
 	}
 }
 
+// If Item represents a nil pointer, writes "nil" and returns true
+func (c *CompositeConverter) convertNil(val *r.Value) bool {
+	if IsNil(val) {
+		c.write("nil")
+		c.stack.Pop()
+		return true
+	}
+
+	return false
+}
+
 // Converts a pointer
 func (c *CompositeConverter) convertPointer(it *Item) {
 	elem := it.val.Elem()
@@ -318,10 +328,6 @@ func (c *CompositeConverter) convertPointer(it *Item) {
 
 // Run the whole conversion from start to finish
 func (c *CompositeConverter) ConvertStackToString() string {
-	if c.stack.Empty() {
-		return ""
-	}
-
 	firstItem := c.stack.Top()
 
 	if c.options.ShowType {

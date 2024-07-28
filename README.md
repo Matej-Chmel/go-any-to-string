@@ -3,7 +3,7 @@ Convert any variable to a string with various formatting options.
 
 ## Installation
 ```bash
-go get github.com/Matej-Chmel/go-any-to-string@v1.1.2
+go get github.com/Matej-Chmel/go-any-to-string@v1.1.3
 ```
 
 ## Features

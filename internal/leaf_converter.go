@@ -160,7 +160,7 @@ func (c *LeafConverter) formatInt(val *r.Value) string {
 
 // Formats an interface
 func (c *LeafConverter) formatInterface(val *r.Value) string {
-	if !val.IsValid() || val.IsZero() || val.IsNil() {
+	if !val.IsValid() || val.IsZero() {
 		return "nil"
 	}
 

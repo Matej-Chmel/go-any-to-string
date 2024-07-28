@@ -244,6 +244,15 @@ func TestComplex(ot *testing.T) {
 	check(1.2345+4.3456i, "(1.234+4.346i)", t)
 }
 
+func TestCustom(ot *testing.T) {
+	t := newTester(ot)
+	data := ExampleCustom{'A', 'b', 'C'}
+
+	check(data, "A -> b -> C", t)
+	check(&data, "A -> b -> C", t)
+	check[*ExampleCustom](nil, "nil", t)
+}
+
 func TestFloat(ot *testing.T) {
 	t := newTester(ot)
 	check(0.0, "0.0", t)
@@ -350,7 +359,6 @@ func TestStruct(ot *testing.T) {
 	a := Example{12, "hello", '*'}
 	b := NestedExample{Example{34, "world", '%'}, "super", 'X'}
 	c := SliceExample{[]byte("hello world"), []int{1, 2, 3}}
-	d := ExampleCustom{'A', 'b', 'C'}
 
 	o := ats.NewOptions()
 	o.ByteAsString = true
@@ -359,25 +367,20 @@ func TestStruct(ot *testing.T) {
 	check(a, "{12 hello *}", t, o)
 	check(b, "{{34 world %} super X}", t, o)
 	check(c, "{hello world [1 2 3]}", t, o)
-	check(d, "A -> b -> C", t, o)
 
 	checkPtr(a, "&{12 hello *}", t, o)
 	checkPtr(b, "&{{34 world %} super X}", t, o)
 	checkPtr(c, "&{hello world [1 2 3]}", t, o)
-	checkPtr(d, "A -> b -> C", t, o)
 
-	o.IgnoreCustomMethod = true
 	o.ShowFieldNames = true
 
 	check(a, "{a:12 B:hello c:*}", t, o)
 	check(b, "{Example:{a:34 B:world c:%} b:super C:X}", t, o)
 	check(c, "{bytes:hello world ints:[1 2 3]}", t, o)
-	check(d, "{a:A b:b c:C}", t, o)
 
 	checkPtr(a, "&{a:12 B:hello c:*}", t, o)
 	checkPtr(b, "&{Example:{a:34 B:world c:%} b:super C:X}", t, o)
 	checkPtr(c, "&{bytes:hello world ints:[1 2 3]}", t, o)
-	checkPtr(d, "&{a:A b:b c:C}", t, o)
 }
 
 func TestZero(ot *testing.T) {
